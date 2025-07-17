@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { QrCode, Camera, Check, AlertCircle, Wifi } from 'lucide-react';
+import QrScanner from 'qr-scanner';
 
 interface QRScannerProps {
   onQRScanned: (sessionId: string) => void;
@@ -11,7 +12,67 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [manualSessionId, setManualSessionId] = useState('');
+  const [hasCamera, setHasCamera] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const qrScannerRef = useRef<QrScanner | null>(null);
+
+  // Check camera availability on component mount
+  useEffect(() => {
+    QrScanner.hasCamera().then(hasCamera => {
+      setHasCamera(hasCamera);
+      console.log('📱 Camera available:', hasCamera);
+    }).catch(err => {
+      console.error('❌ Camera check failed:', err);
+      setHasCamera(false);
+    });
+
+    return () => {
+      // Cleanup scanner on unmount
+      const scanner = qrScannerRef.current;
+      if (scanner) {
+        scanner.stop();
+        scanner.destroy();
+      }
+    };
+  }, []);
+
+  // Extract session ID from URL or direct session ID
+  const extractSessionFromUrl = (data: string): string | null => {
+    try {
+      console.log('🔍 Analyzing QR code data:', data);
+      
+      // If it's already just a session ID (8 characters, alphanumeric)
+      if (/^[A-Z0-9]{8}$/i.test(data.trim())) {
+        console.log('✅ Direct session ID detected:', data.trim());
+        return data.trim().toUpperCase();
+      }
+      
+      // If it's a URL, extract session parameter
+      if (data.includes('http') || data.includes('mobile?session=')) {
+        const urlObj = new URL(data);
+        const sessionParam = urlObj.searchParams.get('session');
+        if (sessionParam) {
+          console.log('✅ Session extracted from URL:', sessionParam);
+          return sessionParam.toUpperCase();
+        }
+      }
+      
+      // Try to find session pattern in string (fallback)
+      const sessionMatch = data.match(/session=([A-Z0-9]{8})/i);
+      if (sessionMatch) {
+        console.log('✅ Session found via pattern match:', sessionMatch[1]);
+        return sessionMatch[1].toUpperCase();
+      }
+      
+      console.log('❌ No session ID found in data');
+      return null;
+    } catch (err) {
+      console.error('❌ Session extraction failed:', err);
+      return null;
+    }
+  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -21,56 +82,33 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
     setError(null);
 
     try {
-      // Create an image element to load the QR code image
-      const img = new Image();
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-
-      img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx?.drawImage(img, 0, 0);
-
-        // Try to extract URL from QR code image
-        // For demo purposes, we'll simulate QR code reading
-        setTimeout(() => {
-          try {
-            // Simulate extracting session ID from QR code
-            // In a real implementation, you'd use a QR code library here
-            const mockSessionId = generateMockSessionId();
-            onQRScanned(mockSessionId);
-          } catch (err) {
-            setError('Could not read QR code. Please try again.');
-          } finally {
-            setIsScanning(false);
-          }
-        }, 1500);
-      };
-
-      img.onerror = () => {
-        setError('Invalid image file');
-        setIsScanning(false);
-      };
-
-      // Convert file to data URL
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        img.src = e.target?.result as string;
-      };
-      reader.readAsDataURL(file);
+      console.log('📷 Processing QR code from uploaded file...');
+      
+      // Use QrScanner to scan the uploaded image
+      const result = await QrScanner.scanImage(file, { returnDetailedScanResult: true });
+      console.log('✅ QR scan successful:', result);
+      
+      // Extract session ID from the scanned URL
+      const sessionId = extractSessionFromUrl(result.data);
+      
+      if (sessionId) {
+        console.log('🎯 Session ID found:', sessionId);
+        onQRScanned(sessionId);
+      } else {
+        console.log('❌ No session ID in QR code:', result.data);
+        setError('QR code does not contain a valid session. Please scan a display screen QR code.');
+      }
+      
     } catch (err) {
-      setError('Failed to process QR code');
+      console.error('❌ QR scan failed:', err);
+      setError('Could not read QR code from image. Please try a clearer image.');
+    } finally {
       setIsScanning(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
-  };
-
-  const generateMockSessionId = () => {
-    // Generate a UUID-like session ID that matches the display screen format
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0;
-      const v = c == 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
   };
 
   const handleManualConnect = () => {
@@ -82,17 +120,71 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
     }
   };
 
-  const startCameraScanning = () => {
-    // For demo purposes, simulate camera scanning
+  const startCameraScanning = async () => {
+    if (!hasCamera) {
+      setError('No camera found. Please upload a QR code image or enter session ID manually.');
+      return;
+    }
+
+    if (!videoRef.current) {
+      setError('Video element not ready. Please try again.');
+      return;
+    }
+
     setIsScanning(true);
+    setCameraActive(true);
     setError(null);
-    
-    setTimeout(() => {
-      const mockSessionId = generateMockSessionId();
-      console.log('📱 Camera scan simulated, generated session ID:', mockSessionId);
-      onQRScanned(mockSessionId);
+
+    try {
+      console.log('📷 Starting camera QR scanner...');
+      
+      // Initialize QR scanner
+      const scanner = new QrScanner(
+        videoRef.current,
+        (result) => {
+          console.log('✅ QR code scanned:', result);
+          
+          // Extract session ID from the scanned URL
+          const sessionId = extractSessionFromUrl(result.data);
+          
+          if (sessionId) {
+            console.log('🎯 Session ID found:', sessionId);
+            onQRScanned(sessionId);
+            stopCameraScanning();
+          } else {
+            console.log('❌ No session ID in QR code:', result.data);
+            setError('QR code does not contain a valid session. Please scan a display screen QR code.');
+          }
+        },
+        {
+          returnDetailedScanResult: true,
+          highlightScanRegion: true,
+          highlightCodeOutline: true,
+        }
+      );
+
+      qrScannerRef.current = scanner;
+      await scanner.start();
+      console.log('📷 Camera started successfully');
+      
+    } catch (err) {
+      console.error('❌ Camera start failed:', err);
+      setError('Failed to start camera. Please check camera permissions or try uploading an image.');
+      setCameraActive(false);
       setIsScanning(false);
-    }, 2000);
+    }
+  };
+
+  const stopCameraScanning = () => {
+    console.log('🛑 Stopping camera scanner...');
+    
+    if (qrScannerRef.current) {
+      qrScannerRef.current.stop();
+      qrScannerRef.current = null;
+    }
+    
+    setCameraActive(false);
+    setIsScanning(false);
   };
 
   if (isConnected) {
@@ -136,20 +228,48 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
 
       {/* Camera Scanning */}
       <div className="space-y-4">
+        {/* Camera Preview */}
+        {cameraActive && (
+          <div className="relative bg-black rounded-lg overflow-hidden">
+            <video
+              ref={videoRef}
+              className="w-full h-64 object-cover"
+              playsInline
+              muted
+            />
+            <div className="absolute top-2 right-2">
+              <button
+                onClick={stopCameraScanning}
+                className="bg-red-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-red-600"
+              >
+                Stop Camera
+              </button>
+            </div>
+            <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-xs">
+              Point camera at QR code
+            </div>
+          </div>
+        )}
+
         <button
-          onClick={startCameraScanning}
-          disabled={isScanning}
+          onClick={cameraActive ? stopCameraScanning : startCameraScanning}
+          disabled={isScanning && !cameraActive || !hasCamera}
           className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-4 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-600 transition-all duration-200 disabled:opacity-50 flex items-center justify-center"
         >
-          {isScanning ? (
+          {isScanning && !cameraActive ? (
             <>
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-              Scanning...
+              Starting Camera...
+            </>
+          ) : cameraActive ? (
+            <>
+              <Camera className="h-5 w-5 mr-2" />
+              Stop Camera
             </>
           ) : (
             <>
               <Camera className="h-5 w-5 mr-2" />
-              Scan with Camera
+              {hasCamera ? 'Scan with Camera' : 'No Camera Available'}
             </>
           )}
         </button>
@@ -175,8 +295,17 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
           disabled={isScanning}
           className="w-full bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors disabled:opacity-50 flex items-center justify-center"
         >
-          <QrCode className="h-5 w-5 mr-2" />
-          Upload QR Image
+          {isScanning ? (
+            <>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-500 mr-2"></div>
+              Processing QR Image...
+            </>
+          ) : (
+            <>
+              <QrCode className="h-5 w-5 mr-2" />
+              Upload QR Image
+            </>
+          )}
         </button>
 
         <div className="flex items-center justify-center">
@@ -188,24 +317,25 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
         {/* Manual Session ID Entry */}
         <div className="space-y-3">
           <label className="block text-sm font-medium text-gray-700">
-            Session ID (get this from display screen)
+            Session ID from Display Screen
           </label>
           <input
             type="text"
-            placeholder="Enter Session ID manually (e.g. abc123...)"
+            placeholder="Enter the Session ID shown on display"
             value={manualSessionId}
-            onChange={(e) => setManualSessionId(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            onChange={(e) => setManualSessionId(e.target.value.toUpperCase())}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-center text-lg"
+            maxLength={8}
           />
-          <div className="text-sm text-gray-500">
-            💡 Tip: Copy the session ID from the display screen (shown as first 8 characters)
+          <div className="text-sm text-gray-500 text-center">
+            Look for the large code on the display screen
           </div>
           <button
             onClick={handleManualConnect}
             className="w-full bg-green-500 text-white py-3 rounded-lg font-medium hover:bg-green-600 transition-colors flex items-center justify-center"
           >
             <Check className="h-5 w-5 mr-2" />
-            Connect to Session: {manualSessionId.slice(0, 8) || 'Enter ID'}
+            Connect to Session: {manualSessionId || 'Enter ID'}
           </button>
         </div>
       </div>
@@ -216,19 +346,19 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
         <div className="space-y-2 text-blue-700 text-sm">
           <div className="flex items-start">
             <div className="bg-blue-500 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold text-white mr-2 mt-0.5">1</div>
-            <p>Open the display screen on a TV or laptop</p>
+            <p>Open display screen: <code>localhost:5173/display</code></p>
           </div>
           <div className="flex items-start">
             <div className="bg-blue-500 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold text-white mr-2 mt-0.5">2</div>
-            <p>Find the QR code on the display screen</p>
+            <p><strong>Camera:</strong> Point at QR code on screen</p>
           </div>
           <div className="flex items-start">
             <div className="bg-blue-500 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold text-white mr-2 mt-0.5">3</div>
-            <p>Scan it with your phone camera or upload an image</p>
+            <p><strong>Upload:</strong> Take screenshot of QR and upload</p>
           </div>
           <div className="flex items-start">
             <div className="bg-blue-500 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold text-white mr-2 mt-0.5">4</div>
-            <p>Start using the virtual try-on features</p>
+            <p><strong>Manual:</strong> Type the 8-character session code</p>
           </div>
         </div>
       </div>

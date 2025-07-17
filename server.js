@@ -36,8 +36,14 @@ io.on('connection', (socket) => {
   // Handle joining a session
   socket.on('join-session', (data) => {
     // Support both old format (string) and new format (object)
-    const sessionId = typeof data === 'string' ? data : data.sessionId;
-    const deviceType = typeof data === 'string' ? 'unknown' : (data.deviceType || 'unknown');
+    const sessionId = typeof data === 'string' ? data : data?.sessionId;
+    const deviceType = typeof data === 'string' ? 'unknown' : (data?.deviceType || 'unknown');
+    
+    if (!sessionId) {
+      console.error('❌ No session ID provided for join-session');
+      socket.emit('error', { message: 'Session ID is required' });
+      return;
+    }
     
     console.log(`📱 Socket ${socket.id} joining session: ${sessionId} as ${deviceType}`);
     

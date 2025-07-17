@@ -35,9 +35,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     console.log('🔌 [SocketContext] connectToSession called with:', newSessionId);
     console.log('🔌 [SocketContext] Current route:', location.pathname);
     console.log('🔌 [SocketContext] Current session:', currentSessionId);
-    console.log('🔌 [SocketContext] Already connected to this session?', currentSessionId === newSessionId && socket?.connected);
     
-    // Check if already connected to this session
+    // Check if already connected to this session with valid socket
     if (currentSessionId === newSessionId && socket?.connected) {
       console.log('✅ [SocketContext] Already connected to session:', newSessionId);
       return;
@@ -52,7 +51,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     // Disconnect existing socket if any
     if (socket) {
       console.log('🔌 [SocketContext] Disconnecting existing socket');
-      socket.close();
+      socket.disconnect();
+      socket.removeAllListeners();
     }
 
     // Get socket URL from environment or default to localhost
@@ -104,8 +104,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       console.log('🔄 Reconnected to Socket.IO server, attempt:', attemptNumber);
       setIsConnected(true);
       setConnectionError(null);
-      // Rejoin session after reconnection
-      newSocket.emit('join-session', newSessionId);
+      // Rejoin session after reconnection with device type
+      const deviceType = location.pathname === '/mobile' ? 'mobile' : 'display';
+      newSocket.emit('join-session', { sessionId: newSessionId, deviceType });
     });
 
     newSocket.on('reconnect_failed', () => {
@@ -133,7 +134,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const disconnect = () => {
     console.log('🧹 Manually disconnecting socket');
     if (socket) {
-      socket.close();
+      socket.disconnect();
+      socket.removeAllListeners();
     }
     setSocket(null);
     setIsConnected(false);
@@ -167,7 +169,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     return () => {
       if (socket) {
         console.log('🧹 Component unmounting, cleaning up socket');
-        socket.close();
+        socket.disconnect();
+        socket.removeAllListeners();
       }
     };
   }, [socket]);

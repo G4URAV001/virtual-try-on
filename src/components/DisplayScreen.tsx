@@ -10,6 +10,7 @@ const DisplayScreen: React.FC = () => {
   const [showQR, setShowQR] = useState(true);
   const [mobileConnected, setMobileConnected] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [sessionUpdated, setSessionUpdated] = useState(false);
   
   const { socket, isConnected, connectionError, connectToSession } = useSocket();
   const { sessionId, generateNewSession, joinSession } = useSession();
@@ -17,18 +18,20 @@ const DisplayScreen: React.FC = () => {
   useEffect(() => {
     if (initialized) return; // Prevent re-initialization
     
+    console.log('📺 [DisplayScreen] Starting initialization...');
+    
     // Check URL params for session ID first
     const urlParams = new URLSearchParams(window.location.search);
     const urlSessionId = urlParams.get('session');
     
     if (urlSessionId) {
-      console.log('📺 Display screen joining URL session:', urlSessionId);
+      console.log('📺 [DisplayScreen] Found URL session:', urlSessionId);
       joinSession(urlSessionId);
       connectToSession(urlSessionId);
     } else {
       // If no URL session, create a new one and update the URL
       const newSessionId = generateNewSession();
-      console.log('📺 Display screen created new session:', newSessionId);
+      console.log('📺 [DisplayScreen] Created new session:', newSessionId);
       
       // Update the URL with the session parameter
       const newUrl = `${window.location.pathname}?session=${newSessionId}`;
@@ -37,7 +40,8 @@ const DisplayScreen: React.FC = () => {
       connectToSession(newSessionId);
     }
     setInitialized(true);
-  }, [initialized, connectToSession, generateNewSession, joinSession]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Intentionally empty - run only once on mount
 
   const mobileUrl = `${window.location.origin}/mobile?session=${sessionId}`;
 
@@ -108,14 +112,28 @@ const DisplayScreen: React.FC = () => {
     } else {
       console.log('⚠️ Cannot set up listeners - missing socket or sessionId:', { socket: !!socket, sessionId });
     }
-  }, [socket, sessionId]);
+  }, [socket, sessionId, mobileConnected]);
 
   const handleNewSession = () => {
     const newSessionId = generateNewSession();
+    console.log('🔄 [DisplayScreen] Creating new session:', newSessionId);
+    
+    // Update the browser URL with the new session ID
+    const newUrl = `${window.location.pathname}?session=${newSessionId}`;
+    window.history.pushState({}, '', newUrl);
+    console.log('🔗 [DisplayScreen] Updated URL to:', newUrl);
+    
+    // Reset display state
     setResultImage(null);
     setLastUpdate(null);
     setShowQR(true);
+    setMobileConnected(false);
     
+    // Show brief notification that session was updated
+    setSessionUpdated(true);
+    setTimeout(() => setSessionUpdated(false), 3000);
+    
+    // Connect to the new session
     connectToSession(newSessionId);
   };
 
@@ -191,11 +209,22 @@ const DisplayScreen: React.FC = () => {
             <button
               onClick={handleNewSession}
               className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 px-6 py-2 rounded-lg font-medium transition-all duration-200"
+              title="Generate a new session ID and update the URL"
             >
               New Session
             </button>
           </div>
         </div>
+
+        {/* Session Update Notification */}
+        {sessionUpdated && (
+          <div className="bg-green-500/20 border border-green-400 rounded-lg p-4 mb-6 flex items-center">
+            <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse mr-3"></div>
+            <span className="text-green-200">
+              New session created! URL updated: {sessionId}
+            </span>
+          </div>
+        )}
 
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -241,8 +270,12 @@ const DisplayScreen: React.FC = () => {
               <div className="space-y-4">
                 <div>
                   <label className="text-blue-200 text-sm">Session ID</label>
-                  <p className="text-2xl font-mono font-bold">{sessionId}</p>
-                  <p className="text-xs text-blue-300 break-all">(Full: {sessionId})</p>
+                  <p className="text-4xl font-mono font-bold text-center py-4 px-6 bg-black/20 rounded-lg border-2 border-blue-400">
+                    {sessionId}
+                  </p>
+                  <p className="text-xs text-blue-300 text-center mt-2">
+                    Enter this code on your mobile device
+                  </p>
                 </div>
                 <div>
                   <label className="text-blue-200 text-sm">Status</label>
@@ -280,15 +313,15 @@ const DisplayScreen: React.FC = () => {
               <div className="space-y-3 text-blue-200">
                 <div className="flex items-start">
                   <div className="bg-blue-500 rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-3 mt-0.5">1</div>
-                  <p>Scan the QR code with your phone</p>
+                  <p>Go to /mobile on your phone or scan QR code</p>
                 </div>
                 <div className="flex items-start">
                   <div className="bg-blue-500 rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-3 mt-0.5">2</div>
-                  <p>Take a photo of yourself</p>
+                  <p>Enter the Session ID shown above</p>
                 </div>
                 <div className="flex items-start">
                   <div className="bg-blue-500 rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-3 mt-0.5">3</div>
-                  <p>Select or upload clothing</p>
+                  <p>Take a photo and select clothing</p>
                 </div>
                 <div className="flex items-start">
                   <div className="bg-blue-500 rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-3 mt-0.5">4</div>

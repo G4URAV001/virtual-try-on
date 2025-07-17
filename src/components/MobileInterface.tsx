@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Shirt, Upload, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Shirt, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import CameraInput from './CameraInput';
 import ClothSelector from './ClothSelector';
 import TryOnResult from './TryOnResult';
@@ -34,7 +34,7 @@ const MobileInterface: React.FC = () => {
     const urlParams = new URLSearchParams(window.location.search);
     const urlSessionId = urlParams.get('session');
     
-    if (urlSessionId) {
+    if (urlSessionId && urlSessionId !== sessionId) {
       console.log('📱 [MobileInterface] Using URL session:', urlSessionId);
       console.log('📱 [MobileInterface] Current sessionId before join:', sessionId);
       joinSession(urlSessionId);
@@ -42,10 +42,11 @@ const MobileInterface: React.FC = () => {
       setCurrentStep('camera'); // Skip QR scanning if session is in URL
       setError(null);
       console.log('📱 [MobileInterface] Connected to session, skipping QR step');
-    } else {
+    } else if (!urlSessionId && !sessionId) {
       console.log('📱 [MobileInterface] No URL session, starting with QR scan');
     }
-  }, [joinSession, connectToSession]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once on mount
 
   const handleQRScanned = (scannedSessionId: string) => {
     console.log('📱 QR Scanned! Session ID:', scannedSessionId);
@@ -232,10 +233,14 @@ const MobileInterface: React.FC = () => {
         </div>
 
         {/* Session Info */}
-        <div className="bg-white rounded-lg shadow-md p-4 text-center">
-          <p className="text-sm text-gray-600 mb-2">Session ID</p>
-          <p className="text-lg font-mono font-semibold text-gray-800">{sessionId.slice(0, 8)}</p>
-        </div>
+        {sessionId && (
+          <div className="bg-white rounded-lg shadow-md p-4 text-center">
+            <p className="text-sm text-gray-600 mb-2">Connected to Session</p>
+            <p className="text-2xl font-mono font-bold text-blue-600 bg-blue-50 py-2 px-4 rounded-lg">
+              {sessionId}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
