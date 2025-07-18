@@ -13,6 +13,7 @@ const DisplayScreen: React.FC = () => {
   const [initialized, setInitialized] = useState(false);
   const [sessionUpdated, setSessionUpdated] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [lastStatusUpdate, setLastStatusUpdate] = useState<number>(0);
   
   const { socket, isConnected, connectionError, connectToSession } = useSocket();
   const { sessionId, generateNewSession, joinSession } = useSession();
@@ -51,6 +52,12 @@ const DisplayScreen: React.FC = () => {
     if (socket && sessionId) {
       console.log('📺 Setting up socket listeners for session:', sessionId);
 
+      // Clean up any existing listeners first to prevent duplicates
+      socket.off('try-on-result');
+      socket.off('session-status');
+      socket.off('session-joined');
+      socket.off('client-disconnected');
+
       // Initially assume no mobile device is connected
       setMobileConnected(false);
       setMobileConnecting(true); // Show connecting state
@@ -63,6 +70,28 @@ const DisplayScreen: React.FC = () => {
 
       // Request session status when first connecting
       socket.emit('get-session-status', { sessionId });
+
+      // Helper function to update mobile connection state consistently with debouncing
+      const updateMobileConnectionState = (mobileCount: number, source: string) => {
+        const now = Date.now();
+        const timeSinceLastUpdate = now - lastStatusUpdate;
+        
+        // Debounce rapid updates (ignore if less than 500ms since last update)
+        if (timeSinceLastUpdate < 500) {
+          console.log(`📱 [DisplayScreen] ${source} - Debouncing update (${timeSinceLastUpdate}ms since last)`);
+          return;
+        }
+        
+        const newMobileConnected = mobileCount > 0;
+        console.log(`📱 [DisplayScreen] ${source} - Mobile count: ${mobileCount}, Setting mobileConnected to: ${newMobileConnected}`);
+        
+        setMobileConnected(newMobileConnected);
+        setMobileConnecting(false); // Clear connecting state
+        setLastStatusUpdate(now);
+        
+        // Force a state update to ensure UI reflects the change
+        setSessionUpdated(prev => !prev);
+      };
 
       socket.on('try-on-result', (data) => {
         console.log('📺 Received try-on result:', data);
@@ -85,55 +114,34 @@ const DisplayScreen: React.FC = () => {
 
       socket.on('session-status', (data) => {
         console.log('📊 [DisplayScreen] Session status received:', data);
-        console.log('📊 [DisplayScreen] Mobile count in session:', data.mobileCount);
-        
-        // Update mobile connected status based on current session state
-        if (data.mobileCount > 0) {
-          console.log('📱 [DisplayScreen] Mobile devices already in session, setting mobileConnected to TRUE');
-          setMobileConnected(true);
-        } else {
-          console.log('📺 [DisplayScreen] No mobile devices in session, keeping mobileConnected FALSE');
-          setMobileConnected(false);
-        }
-        
-        // Clear connecting state since we got a response
-        setMobileConnecting(false);
+        updateMobileConnectionState(data.mobileCount, 'session-status');
       });
 
       socket.on('session-joined', (data) => {
         console.log('📱 [DisplayScreen] Session-joined event received:', data);
         console.log('📱 [DisplayScreen] Event session ID:', data.sessionId);
         console.log('📱 [DisplayScreen] Our session ID:', sessionId);
-        console.log('📱 [DisplayScreen] Mobile count:', data.mobileCount);
-        console.log('📱 [DisplayScreen] Display count:', data.displayCount);
-        console.log('📱 [DisplayScreen] Total client count:', data.clientCount);
-        console.log('📱 [DisplayScreen] Current mobileConnected state:', mobileConnected);
+        console.log('📱 [DisplayScreen] Device type that joined:', data.joinedDeviceType);
         
-        // IMMEDIATE UI UPDATE - don't wait for other conditions
-        const newMobileConnected = data.mobileCount > 0;
-        console.log('📱 [DisplayScreen] Setting mobileConnected to:', newMobileConnected);
-        setMobileConnected(newMobileConnected);
-        
-        // Clear connecting state since we got a response
-        setMobileConnecting(false);
-        
-        // Force a state update to ensure UI reflects the change
-        setSessionUpdated(prev => !prev);
+        // Only update if this is about our session
+        if (data.sessionId === sessionId) {
+          updateMobileConnectionState(data.mobileCount, 'session-joined');
+        } else {
+          console.log('📱 [DisplayScreen] Ignoring session-joined for different session');
+        }
       });
 
       socket.on('client-disconnected', (data) => {
         console.log('❌ [DisplayScreen] Client disconnected:', data);
         console.log('❌ [DisplayScreen] Disconnected device type:', data.deviceType);
-        console.log('📊 [DisplayScreen] Remaining mobile count:', data.mobileCount);
-        console.log('📊 [DisplayScreen] Remaining display count:', data.displayCount);
+        console.log('📊 [DisplayScreen] Session ID:', data.sessionId);
         
-        // IMMEDIATE UI UPDATE for disconnections
-        const newMobileConnected = data.mobileCount > 0;
-        console.log('📱 [DisplayScreen] Setting mobileConnected to:', newMobileConnected);
-        setMobileConnected(newMobileConnected);
-        
-        // Force a state update to ensure UI reflects the change
-        setSessionUpdated(prev => !prev);
+        // Only update if this is about our session
+        if (data.sessionId === sessionId) {
+          updateMobileConnectionState(data.mobileCount, 'client-disconnected');
+        } else {
+          console.log('❌ [DisplayScreen] Ignoring client-disconnected for different session');
+        }
       });
 
       return () => {
@@ -149,7 +157,7 @@ const DisplayScreen: React.FC = () => {
     } else {
       console.log('⚠️ Cannot set up listeners - missing socket or sessionId:', { socket: !!socket, sessionId });
     }
-  }, [socket, sessionId, mobileConnected]);
+  }, [socket, sessionId, mobileConnected, lastStatusUpdate]);
 
   const handleNewSession = () => {
     const newSessionId = generateNewSession();

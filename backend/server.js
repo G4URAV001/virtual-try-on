@@ -105,6 +105,7 @@ io.on('connection', (socket) => {
     setImmediate(() => {
       io.to(sessionId).emit('session-joined', broadcastData);
       console.log(`📤 Broadcasted session-joined immediately to session ${sessionId}`);
+      console.log(`📤 Broadcast data:`, JSON.stringify(broadcastData, null, 2));
     });
 
     // Send existing result to the newly joined client if available
@@ -121,7 +122,7 @@ io.on('connection', (socket) => {
   // Handle session status request
   socket.on('get-session-status', (data) => {
     const sessionId = data.sessionId;
-    console.log(`📊 Session status requested for: ${sessionId}`);
+    console.log(`📊 Session status requested for: ${sessionId} by socket: ${socket.id}`);
     
     if (!sessionId) {
       console.error('❌ No session ID provided for session status request');
@@ -135,13 +136,16 @@ io.on('connection', (socket) => {
       
       console.log(`📊 Sending session status: ${displayCount} displays, ${mobileCount} mobiles, ${sessionData.clients.size} total`);
       
-      socket.emit('session-status', {
+      const statusData = {
         sessionId,
         clientCount: sessionData.clients.size,
         mobileCount: mobileCount,
         displayCount: displayCount,
         hasResult: !!sessionData.lastResult
-      });
+      };
+      
+      socket.emit('session-status', statusData);
+      console.log(`📤 Sent session-status to socket ${socket.id}:`, JSON.stringify(statusData, null, 2));
     } else {
       console.log(`📊 Session ${sessionId} not found, sending empty status`);
       socket.emit('session-status', {

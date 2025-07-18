@@ -52,6 +52,13 @@ const MobileInterface: React.FC = () => {
     console.log('📱 [MobileInterface] QR scanned, session ID:', scannedSessionId);
     console.log('📱 [MobileInterface] Current sessionId before join:', sessionId);
     
+    // Prevent double connections to the same session
+    if (sessionId === scannedSessionId && isConnected) {
+      console.log('📱 [MobileInterface] Already connected to this session, skipping');
+      setCurrentStep('camera');
+      return;
+    }
+    
     // Show immediate connecting feedback
     setError(null);
     
