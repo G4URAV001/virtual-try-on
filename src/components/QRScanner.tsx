@@ -15,7 +15,9 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
   const [manualSessionId, setManualSessionId] = useState('');
   const [hasCamera, setHasCamera] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
+  const [useFallbackCamera, setUseFallbackCamera] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const qrScannerRef = useRef<QrScanner | null>(null);
 
@@ -127,11 +129,6 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
       return;
     }
 
-    if (!videoRef.current) {
-      setError('Video element not ready. Please try again.');
-      return;
-    }
-
     setIsScanning(true);
     setCameraActive(true);
     setError(null);
@@ -139,7 +136,61 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
     try {
       console.log('📷 Starting camera QR scanner...');
       
-      // Initialize QR scanner
+      // Wait for video element to be ready with timeout
+      await new Promise((resolve, reject) => {
+        let attempts = 0;
+        const maxAttempts = 20; // 2 seconds total
+        
+        const checkVideoReady = () => {
+          attempts++;
+          if (videoRef.current) {
+            resolve(true);
+          } else if (attempts >= maxAttempts) {
+            reject(new Error('Video element not ready after timeout'));
+          } else {
+            setTimeout(checkVideoReady, 100);
+          }
+        };
+        checkVideoReady();
+      }).catch(() => {
+        // If video element is not ready, we'll still try to proceed
+        console.warn('⚠️ Video element readiness check timed out, proceeding anyway');
+      });
+
+      if (!videoRef.current) {
+        throw new Error('Video element not available');
+      }
+
+      // Wait for video element to be in DOM and ready
+      await new Promise((resolve) => {
+        const video = videoRef.current!;
+        let timeout: NodeJS.Timeout;
+        
+        const cleanup = () => {
+          if (timeout) clearTimeout(timeout);
+          video.removeEventListener('loadedmetadata', onReady);
+          video.removeEventListener('canplay', onReady);
+        };
+        
+        const onReady = () => {
+          cleanup();
+          resolve(true);
+        };
+        
+        if (video.readyState >= 1) {
+          resolve(true);
+        } else {
+          video.addEventListener('loadedmetadata', onReady);
+          video.addEventListener('canplay', onReady);
+          // Set a timeout to resolve anyway
+          timeout = setTimeout(() => {
+            cleanup();
+            resolve(true);
+          }, 1000);
+        }
+      });
+      
+      // Initialize QR scanner with better error handling
       const scanner = new QrScanner(
         videoRef.current,
         (result) => {
@@ -161,17 +212,88 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
           returnDetailedScanResult: true,
           highlightScanRegion: true,
           highlightCodeOutline: true,
+          preferredCamera: 'environment', // Use back camera on mobile
+          maxScansPerSecond: 5, // Limit scan rate for performance
         }
       );
 
       qrScannerRef.current = scanner;
-      await scanner.start();
-      console.log('📷 Camera started successfully');
+      
+      // Start scanner with retry logic
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      const tryStart = async (): Promise<void> => {
+        try {
+          await scanner.start();
+          console.log('📷 Camera started successfully');
+        } catch (err) {
+          retryCount++;
+          if (retryCount < maxRetries) {
+            console.log(`🔄 Retrying camera start (${retryCount}/${maxRetries})...`);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await tryStart();
+          } else {
+            throw err;
+          }
+        }
+      };
+      
+      await tryStart();
       
     } catch (err) {
       console.error('❌ Camera start failed:', err);
-      setError('Failed to start camera. Please check camera permissions or try uploading an image.');
+      setError('Failed to start camera. Please use the "Take QR Photo" option below.');
       setCameraActive(false);
+      setIsScanning(false);
+      
+      // Enable fallback camera option
+      setUseFallbackCamera(true);
+    }
+  };
+
+  const handleCameraFallback = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsScanning(true);
+    setError(null);
+
+    try {
+      console.log('📷 Processing QR code from camera capture...');
+      
+      // Use QrScanner to scan the captured image
+      QrScanner.scanImage(file, { returnDetailedScanResult: true })
+        .then((result) => {
+          console.log('✅ QR scan successful:', result);
+          
+          // Extract session ID from the scanned URL
+          const sessionId = extractSessionFromUrl(result.data);
+          
+          if (sessionId) {
+            console.log('🎯 Session ID found:', sessionId);
+            onQRScanned(sessionId);
+            setUseFallbackCamera(false);
+          } else {
+            console.log('❌ No session ID in QR code:', result.data);
+            setError('QR code does not contain a valid session. Please scan a display screen QR code.');
+          }
+        })
+        .catch((err) => {
+          console.error('❌ QR scan failed:', err);
+          setError('Could not read QR code from image. Please try a clearer image.');
+        })
+        .finally(() => {
+          setIsScanning(false);
+          // Reset file input
+          if (cameraInputRef.current) {
+            cameraInputRef.current.value = '';
+          }
+        });
+      
+    } catch (err) {
+      console.error('❌ QR scan failed:', err);
+      setError('Could not read QR code from image. Please try a clearer image.');
       setIsScanning(false);
     }
   };
@@ -246,6 +368,12 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
               className="w-full h-64 object-cover"
               playsInline
               muted
+              onLoadedMetadata={() => {
+                console.log('📷 Video metadata loaded');
+              }}
+              onCanPlay={() => {
+                console.log('📷 Video can play');
+              }}
             />
             <div className="absolute top-2 right-2">
               <button
@@ -259,6 +387,16 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
               Point camera at QR code
             </div>
           </div>
+        )}
+
+        {/* Always render video element but hidden when not active */}
+        {!cameraActive && (
+          <video
+            ref={videoRef}
+            className="hidden"
+            playsInline
+            muted
+          />
         )}
 
         <button
@@ -283,6 +421,38 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
             </>
           )}
         </button>
+
+        {/* Fallback Camera Button - appears after camera fails */}
+        {useFallbackCamera && (
+          <>
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleCameraFallback}
+              className="hidden"
+              disabled={isScanning}
+            />
+            <button
+              onClick={() => cameraInputRef.current?.click()}
+              disabled={isScanning}
+              className="w-full bg-green-500 text-white py-3 rounded-lg font-medium hover:bg-green-600 transition-colors disabled:opacity-50 flex items-center justify-center"
+            >
+              {isScanning ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                  Processing QR...
+                </>
+              ) : (
+                <>
+                  <Camera className="h-5 w-5 mr-2" />
+                  Take QR Photo
+                </>
+              )}
+            </button>
+          </>
+        )}
 
         <div className="flex items-center justify-center">
           <div className="flex-1 border-t border-gray-300"></div>
