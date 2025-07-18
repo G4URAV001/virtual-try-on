@@ -62,11 +62,11 @@ const DisplayScreen: React.FC = () => {
       setMobileConnected(false);
       setMobileConnecting(true);
 
-      // Clear connecting state after 10 seconds if no response
+      // Clear connecting state after 30 seconds if no response (was 10 seconds)
       const connectingTimeout = setTimeout(() => {
         console.log('⏰ [DisplayScreen] Connecting timeout - clearing connecting state');
         setMobileConnecting(false);
-      }, 10000);
+      }, 30000);
 
       // Request session status when first connecting
       socket.emit('get-session-status', { sessionId });
