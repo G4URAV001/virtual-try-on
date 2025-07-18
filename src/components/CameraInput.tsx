@@ -8,7 +8,8 @@ interface CameraInputProps {
 const CameraInput: React.FC<CameraInputProps> = ({ onImageCapture }) => {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -32,8 +33,8 @@ const CameraInput: React.FC<CameraInputProps> = ({ onImageCapture }) => {
 
   const handleRetake = () => {
     setPreviewImage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    if (cameraInputRef.current) {
+      cameraInputRef.current.value = '';
     }
   };
 
@@ -47,10 +48,12 @@ const CameraInput: React.FC<CameraInputProps> = ({ onImageCapture }) => {
       {!previewImage ? (
         <div className="space-y-4">
           <div className="relative">
+            {/* Camera input (for taking a photo) */}
             <input
-              ref={fileInputRef}
+              ref={cameraInputRef}
               type="file"
               accept="image/*"
+              capture="environment"
               onChange={handleFileSelect}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               disabled={isCapturing}
@@ -70,6 +73,16 @@ const CameraInput: React.FC<CameraInputProps> = ({ onImageCapture }) => {
             </div>
           </div>
 
+          {/* Gallery input (for uploading from gallery) */}
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            className="hidden"
+            disabled={isCapturing}
+          />
+
           <div className="flex items-center justify-center">
             <div className="flex-1 border-t border-gray-300"></div>
             <span className="px-4 text-gray-500 text-sm">or</span>
@@ -77,7 +90,7 @@ const CameraInput: React.FC<CameraInputProps> = ({ onImageCapture }) => {
           </div>
 
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => galleryInputRef.current?.click()}
             className="w-full bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors flex items-center justify-center"
           >
             <Upload className="h-5 w-5 mr-2" />
