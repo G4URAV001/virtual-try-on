@@ -58,9 +58,9 @@ const DisplayScreen: React.FC = () => {
       socket.off('session-joined');
       socket.off('client-disconnected');
 
-      // Initially assume no mobile device is connected
+      // Only reset state when sessionId changes
       setMobileConnected(false);
-      setMobileConnecting(true); // Show connecting state
+      setMobileConnecting(true);
 
       // Clear connecting state after 10 seconds if no response
       const connectingTimeout = setTimeout(() => {
@@ -71,44 +71,33 @@ const DisplayScreen: React.FC = () => {
       // Request session status when first connecting
       socket.emit('get-session-status', { sessionId });
 
-      // Helper function to update mobile connection state consistently with debouncing
+      // Helper function to update mobile connection state (no debounce)
       const updateMobileConnectionState = (mobileCount: number, source: string) => {
-        const now = Date.now();
-        const timeSinceLastUpdate = now - lastStatusUpdate;
-        
-        // Debounce rapid updates (ignore if less than 500ms since last update)
-        if (timeSinceLastUpdate < 500) {
-          console.log(`📱 [DisplayScreen] ${source} - Debouncing update (${timeSinceLastUpdate}ms since last)`);
-          return;
-        }
-        
         const newMobileConnected = mobileCount > 0;
         console.log(`📱 [DisplayScreen] ${source} - Mobile count: ${mobileCount}, Setting mobileConnected to: ${newMobileConnected}`);
-        
         setMobileConnected(newMobileConnected);
-        setMobileConnecting(false); // Clear connecting state
-        setLastStatusUpdate(now);
-        
-        // Force a state update to ensure UI reflects the change
+        if (newMobileConnected) setMobileConnecting(false); // Immediately clear connecting state
         setSessionUpdated(prev => !prev);
       };
 
       socket.on('try-on-result', (data) => {
-        console.log('📺 Received try-on result:', data);
-        console.log('📺 Current sessionId:', sessionId);
-        console.log('📺 Result sessionId:', data.sessionId);
-        console.log('📺 Session IDs match:', data.sessionId === sessionId);
-        
+        console.log('📺 [DisplayScreen] Received try-on result:', data);
+        console.log('📺 [DisplayScreen] Current sessionId:', sessionId);
+        console.log('📺 [DisplayScreen] Result sessionId:', data.sessionId);
+        console.log('📺 [DisplayScreen] Session IDs match:', data.sessionId === sessionId);
         if (data.sessionId === sessionId) {
-          console.log('✅ Result matches our session, displaying image');
-          setResultImage(data.result);
-          setLastUpdate(data.timestamp);
-          setShowQR(false);
-          // Automatically show fullscreen when result is received
-          setIsFullscreen(true);
+          if (data.result && typeof data.result === 'string') {
+            setResultImage(data.result);
+            setLastUpdate(data.timestamp);
+            setShowQR(false);
+            setIsFullscreen(true);
+            console.log('✅ [DisplayScreen] Result image set and displayed.');
+          } else {
+            console.warn('⚠️ [DisplayScreen] Received try-on result with missing or invalid image data:', data);
+          }
         } else {
-          console.log('❌ Result for different session, ignoring');
-          console.log('❌ Expected:', sessionId, 'Got:', data.sessionId);
+          console.log('❌ [DisplayScreen] Result for different session, ignoring');
+          console.log('❌ [DisplayScreen] Expected:', sessionId, 'Got:', data.sessionId);
         }
       });
 
@@ -122,8 +111,6 @@ const DisplayScreen: React.FC = () => {
         console.log('📱 [DisplayScreen] Event session ID:', data.sessionId);
         console.log('📱 [DisplayScreen] Our session ID:', sessionId);
         console.log('📱 [DisplayScreen] Device type that joined:', data.joinedDeviceType);
-        
-        // Only update if this is about our session
         if (data.sessionId === sessionId) {
           updateMobileConnectionState(data.mobileCount, 'session-joined');
         } else {
@@ -135,8 +122,6 @@ const DisplayScreen: React.FC = () => {
         console.log('❌ [DisplayScreen] Client disconnected:', data);
         console.log('❌ [DisplayScreen] Disconnected device type:', data.deviceType);
         console.log('📊 [DisplayScreen] Session ID:', data.sessionId);
-        
-        // Only update if this is about our session
         if (data.sessionId === sessionId) {
           updateMobileConnectionState(data.mobileCount, 'client-disconnected');
         } else {
@@ -149,15 +134,13 @@ const DisplayScreen: React.FC = () => {
         socket.off('session-status');
         socket.off('session-joined');
         socket.off('client-disconnected');
-        // Clear timeout if component unmounts
-        if (connectingTimeout) {
-          clearTimeout(connectingTimeout);
-        }
+        if (connectingTimeout) clearTimeout(connectingTimeout);
       };
     } else {
       console.log('⚠️ Cannot set up listeners - missing socket or sessionId:', { socket: !!socket, sessionId });
     }
-  }, [socket, sessionId, mobileConnected, lastStatusUpdate]);
+    // ONLY depend on socket and sessionId!
+  }, [socket, sessionId]);
 
   const handleNewSession = () => {
     const newSessionId = generateNewSession();
