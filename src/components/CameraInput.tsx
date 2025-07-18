@@ -51,7 +51,6 @@ const CameraInput: React.FC<CameraInputProps> = ({ onImageCapture }) => {
               ref={fileInputRef}
               type="file"
               accept="image/*"
-              capture="environment"
               onChange={handleFileSelect}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               disabled={isCapturing}
