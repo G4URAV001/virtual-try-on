@@ -20,7 +20,15 @@ app.use(express.json());
 const io = new SocketIOServer(server, {
   cors: corsOptions,
   pingTimeout: 60000,
-  pingInterval: 25000
+  pingInterval: 25000,
+  // Optimize for faster connections
+  transports: ['websocket', 'polling'],
+  allowEIO3: true,
+  serveClient: false,
+  // Reduce connection establishment time
+  connectTimeout: 5000,
+  httpCompression: true,
+  perMessageDeflate: false
 });
 
 // Store active sessions and their connected clients
@@ -82,8 +90,8 @@ io.on('connection', (socket) => {
     
     console.log(`📊 Session ${sessionId} now has: ${displayCount} displays, ${mobileCount} mobiles, ${sessionData.clients.size} total`);
 
-    // Broadcast updated client count to ALL clients in the session
-    io.to(sessionId).emit('session-joined', {
+    // Broadcast updated client count to ALL clients in the session IMMEDIATELY
+    const broadcastData = {
       sessionId,
       clientCount: sessionData.clients.size,
       mobileCount: mobileCount,
@@ -91,11 +99,20 @@ io.on('connection', (socket) => {
       hasResult: !!sessionData.lastResult,
       joinedSocketId: socket.id,
       joinedDeviceType: deviceType
+    };
+
+    // Use immediate emission with no delay
+    setImmediate(() => {
+      io.to(sessionId).emit('session-joined', broadcastData);
+      console.log(`📤 Broadcasted session-joined immediately to session ${sessionId}`);
     });
 
     // Send existing result to the newly joined client if available
     if (sessionData.lastResult) {
-      socket.emit('try-on-result', sessionData.lastResult);
+      setImmediate(() => {
+        socket.emit('try-on-result', sessionData.lastResult);
+        console.log(`📤 Sent existing result to new client ${socket.id}`);
+      });
     }
 
     console.log(`📊 Session ${sessionId} now has ${sessionData.clients.size} clients`);

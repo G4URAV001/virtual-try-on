@@ -61,14 +61,17 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     console.log('🔌 [SocketContext] Connecting to Socket.IO server:', socketUrl, 'Session:', newSessionId);
     setCurrentSessionId(newSessionId);
 
-    // Create socket connection
+    // Create socket connection with optimized settings
     const newSocket = io(socketUrl, {
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
-      timeout: 10000,
-      transports: ['websocket', 'polling']
+      timeout: 5000, // Reduced from 10000 to 5000ms
+      transports: ['websocket', 'polling'],
+      forceNew: true, // Force new connection to avoid stale connections
+      upgrade: true, // Allow transport upgrades
+      rememberUpgrade: true // Remember successful upgrades
     });
 
     // Connection event handlers

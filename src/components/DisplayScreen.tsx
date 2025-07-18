@@ -9,6 +9,7 @@ const DisplayScreen: React.FC = () => {
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
   const [showQR, setShowQR] = useState(true);
   const [mobileConnected, setMobileConnected] = useState(false);
+  const [mobileConnecting, setMobileConnecting] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [sessionUpdated, setSessionUpdated] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -52,6 +53,13 @@ const DisplayScreen: React.FC = () => {
 
       // Initially assume no mobile device is connected
       setMobileConnected(false);
+      setMobileConnecting(true); // Show connecting state
+
+      // Clear connecting state after 10 seconds if no response
+      const connectingTimeout = setTimeout(() => {
+        console.log('⏰ [DisplayScreen] Connecting timeout - clearing connecting state');
+        setMobileConnecting(false);
+      }, 10000);
 
       // Request session status when first connecting
       socket.emit('get-session-status', { sessionId });
@@ -87,6 +95,9 @@ const DisplayScreen: React.FC = () => {
           console.log('📺 [DisplayScreen] No mobile devices in session, keeping mobileConnected FALSE');
           setMobileConnected(false);
         }
+        
+        // Clear connecting state since we got a response
+        setMobileConnecting(false);
       });
 
       socket.on('session-joined', (data) => {
@@ -98,14 +109,16 @@ const DisplayScreen: React.FC = () => {
         console.log('📱 [DisplayScreen] Total client count:', data.clientCount);
         console.log('📱 [DisplayScreen] Current mobileConnected state:', mobileConnected);
         
-        // Only show mobile connected if there are actual mobile devices
-        if (data.mobileCount > 0) {
-          console.log('📱 [DisplayScreen] Setting mobileConnected to TRUE (mobile devices present)');
-          setMobileConnected(true);
-        } else {
-          console.log('📺 [DisplayScreen] Setting mobileConnected to FALSE (no mobile devices)');
-          setMobileConnected(false);
-        }
+        // IMMEDIATE UI UPDATE - don't wait for other conditions
+        const newMobileConnected = data.mobileCount > 0;
+        console.log('📱 [DisplayScreen] Setting mobileConnected to:', newMobileConnected);
+        setMobileConnected(newMobileConnected);
+        
+        // Clear connecting state since we got a response
+        setMobileConnecting(false);
+        
+        // Force a state update to ensure UI reflects the change
+        setSessionUpdated(prev => !prev);
       });
 
       socket.on('client-disconnected', (data) => {
@@ -114,14 +127,13 @@ const DisplayScreen: React.FC = () => {
         console.log('📊 [DisplayScreen] Remaining mobile count:', data.mobileCount);
         console.log('📊 [DisplayScreen] Remaining display count:', data.displayCount);
         
-        // Update mobile connected status based on remaining mobile devices
-        if (data.mobileCount > 0) {
-          console.log('📱 [DisplayScreen] Still have mobile devices connected');
-          setMobileConnected(true);
-        } else {
-          console.log('📺 [DisplayScreen] No mobile devices remaining, setting mobileConnected to FALSE');
-          setMobileConnected(false);
-        }
+        // IMMEDIATE UI UPDATE for disconnections
+        const newMobileConnected = data.mobileCount > 0;
+        console.log('📱 [DisplayScreen] Setting mobileConnected to:', newMobileConnected);
+        setMobileConnected(newMobileConnected);
+        
+        // Force a state update to ensure UI reflects the change
+        setSessionUpdated(prev => !prev);
       });
 
       return () => {
@@ -129,6 +141,10 @@ const DisplayScreen: React.FC = () => {
         socket.off('session-status');
         socket.off('session-joined');
         socket.off('client-disconnected');
+        // Clear timeout if component unmounts
+        if (connectingTimeout) {
+          clearTimeout(connectingTimeout);
+        }
       };
     } else {
       console.log('⚠️ Cannot set up listeners - missing socket or sessionId:', { socket: !!socket, sessionId });
@@ -335,6 +351,12 @@ const DisplayScreen: React.FC = () => {
                       <span className="ml-2 text-red-300 text-sm">({connectionError})</span>
                     )}
                   </>
+                ) : mobileConnecting ? (
+                  <>
+                    <Wifi className="h-5 w-5 mr-2 text-blue-400 animate-pulse" />
+                    <span>Mobile Connecting... 🔄</span>
+                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-ping ml-2"></div>
+                  </>
                 ) : mobileConnected ? (
                   <>
                     <Wifi className="h-5 w-5 mr-2" />
@@ -350,7 +372,7 @@ const DisplayScreen: React.FC = () => {
                 )}
                 <div className="ml-4 text-xs">
                   <div>Socket: {isConnected ? '🟢 Connected' : '🔴 Disconnected'}</div>
-                  <div>Mobile: {mobileConnected ? '🟢 True' : '🔴 False'}</div>
+                  <div>Mobile: {mobileConnecting ? '🔄 Connecting' : mobileConnected ? '🟢 True' : '🔴 False'}</div>
                   <div>Session: {sessionId?.substring(0, 8) || 'None'}</div>
                 </div>
               </div>

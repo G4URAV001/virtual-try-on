@@ -337,6 +337,11 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
           <Camera className="h-5 w-5 mr-2" />
           Continue to Camera
         </button>
+        
+        {/* Quick connection status */}
+        <div className="mt-4 text-xs text-green-600">
+          ⚡ Display screen should show "Mobile Connected" immediately
+        </div>
       </div>
     );
   }

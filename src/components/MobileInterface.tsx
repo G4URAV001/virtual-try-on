@@ -49,16 +49,26 @@ const MobileInterface: React.FC = () => {
   }, []); // Run only once on mount
 
   const handleQRScanned = (scannedSessionId: string) => {
-    console.log('📱 QR Scanned! Session ID:', scannedSessionId);
-    // Update the session context with the scanned session ID
-    joinSession(scannedSessionId);
-    // Connect to WebSocket with the scanned session ID
-    connectToSession(scannedSessionId);
-    setCurrentStep('camera');
+    console.log('📱 [MobileInterface] QR scanned, session ID:', scannedSessionId);
+    console.log('📱 [MobileInterface] Current sessionId before join:', sessionId);
+    
+    // Show immediate connecting feedback
     setError(null);
-  };
-
-  const handleContinueToCamera = () => {
+    
+    // Join session and connect to socket
+    joinSession(scannedSessionId);
+    connectToSession(scannedSessionId);
+    
+    // Immediately show that we're connecting
+    console.log('📱 [MobileInterface] Connection initiated, moving to camera step');
+    setCurrentStep('camera');
+    
+    // Show brief connecting message
+    setError('🔄 Connecting to display screen...');
+    setTimeout(() => {
+      setError(null);
+    }, 2000);
+  };  const handleContinueToCamera = () => {
     setCurrentStep('camera');
     setError(null);
   };
