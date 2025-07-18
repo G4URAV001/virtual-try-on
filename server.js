@@ -6,15 +6,12 @@ import cors from 'cors';
 const app = express();
 const server = createServer(app);
 
-// Configure CORS for Socket.IO and Express
+// Configure CORS for Socket.IO and Express - Allow all origins for deployment
 const corsOptions = {
-  origin: [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:3000"
-  ],
-  credentials: true
+  origin: true, // Allow all origins
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 
 app.use(cors(corsOptions));
@@ -102,6 +99,42 @@ io.on('connection', (socket) => {
     }
 
     console.log(`📊 Session ${sessionId} now has ${sessionData.clients.size} clients`);
+  });
+
+  // Handle session status request
+  socket.on('get-session-status', (data) => {
+    const sessionId = data.sessionId;
+    console.log(`📊 Session status requested for: ${sessionId}`);
+    
+    if (!sessionId) {
+      console.error('❌ No session ID provided for session status request');
+      return;
+    }
+
+    const sessionData = sessions.get(sessionId);
+    if (sessionData) {
+      const mobileCount = Array.from(sessionData.deviceTypes.values()).filter(type => type === 'mobile').length;
+      const displayCount = Array.from(sessionData.deviceTypes.values()).filter(type => type === 'display').length;
+      
+      console.log(`📊 Sending session status: ${displayCount} displays, ${mobileCount} mobiles, ${sessionData.clients.size} total`);
+      
+      socket.emit('session-status', {
+        sessionId,
+        clientCount: sessionData.clients.size,
+        mobileCount: mobileCount,
+        displayCount: displayCount,
+        hasResult: !!sessionData.lastResult
+      });
+    } else {
+      console.log(`📊 Session ${sessionId} not found, sending empty status`);
+      socket.emit('session-status', {
+        sessionId,
+        clientCount: 0,
+        mobileCount: 0,
+        displayCount: 0,
+        hasResult: false
+      });
+    }
   });
 
   // Handle try-on results

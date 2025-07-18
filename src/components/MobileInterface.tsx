@@ -58,6 +58,11 @@ const MobileInterface: React.FC = () => {
     setError(null);
   };
 
+  const handleContinueToCamera = () => {
+    setCurrentStep('camera');
+    setError(null);
+  };
+
   const handleImageCapture = (imageDataUrl: string) => {
     setUserImage(imageDataUrl);
     setCurrentStep('clothing');
@@ -138,6 +143,24 @@ const MobileInterface: React.FC = () => {
     setError(null);
   };
 
+  const handleStartOver = () => {
+    setCurrentStep('camera');
+    setUserImage(null);
+    setSelectedClothing(null);
+    setClothingImage(null);
+    setResultImage(null);
+    setError(null);
+  };
+
+  const handleTryAnotherOutfit = () => {
+    // Keep the photo, but go back to clothing selection
+    setCurrentStep('clothing');
+    setSelectedClothing(null);
+    setClothingImage(null);
+    setResultImage(null);
+    setError(null);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 p-4">
       <div className="max-w-md mx-auto">
@@ -182,6 +205,7 @@ const MobileInterface: React.FC = () => {
               onQRScanned={handleQRScanned} 
               isConnected={isConnected} 
               connectedSessionId={sessionId || undefined}
+              onContinue={handleContinueToCamera}
             />
           )}
 
@@ -210,6 +234,7 @@ const MobileInterface: React.FC = () => {
               resultImage={resultImage}
               onReset={resetProcess}
               sessionId={sessionId || 'no-session'}
+              onTryAnotherOutfit={handleTryAnotherOutfit}
             />
           )}
 

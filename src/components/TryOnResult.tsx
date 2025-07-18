@@ -5,9 +5,10 @@ interface TryOnResultProps {
   resultImage: string;
   onReset: () => void;
   sessionId: string;
+  onTryAnotherOutfit?: () => void;
 }
 
-const TryOnResult: React.FC<TryOnResultProps> = ({ resultImage, onReset, sessionId }) => {
+const TryOnResult: React.FC<TryOnResultProps> = ({ resultImage, onReset, sessionId, onTryAnotherOutfit }) => {
   const [copied, setCopied] = useState(false);
 
   const handleDownload = () => {
@@ -104,12 +105,22 @@ const TryOnResult: React.FC<TryOnResultProps> = ({ resultImage, onReset, session
         </button>
       </div>
 
+      {/* Try Another Outfit Button */}
+      <button
+        onClick={onTryAnotherOutfit || onReset}
+        className="w-full bg-purple-500 text-white py-3 rounded-lg font-medium hover:bg-purple-600 transition-colors flex items-center justify-center"
+      >
+        <RotateCcw className="h-5 w-5 mr-2" />
+        Try Another Outfit
+      </button>
+
+      {/* Start Over Button */}
       <button
         onClick={onReset}
         className="w-full bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center justify-center"
       >
         <RotateCcw className="h-5 w-5 mr-2" />
-        Try Another Outfit
+        Start Over (New Photo)
       </button>
     </div>
   );

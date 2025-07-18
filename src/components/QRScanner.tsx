@@ -6,9 +6,10 @@ interface QRScannerProps {
   onQRScanned: (sessionId: string) => void;
   isConnected: boolean;
   connectedSessionId?: string;
+  onContinue?: () => void;
 }
 
-const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connectedSessionId }) => {
+const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connectedSessionId, onContinue }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [manualSessionId, setManualSessionId] = useState('');
@@ -205,6 +206,15 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2"></div>
           <span className="text-green-700 text-sm">Live connection active</span>
         </div>
+        
+        {/* Continue Button */}
+        <button
+          onClick={onContinue}
+          className="mt-6 w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center"
+        >
+          <Camera className="h-5 w-5 mr-2" />
+          Continue to Camera
+        </button>
       </div>
     );
   }

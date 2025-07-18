@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Monitor, Smartphone, Wifi, WifiOff, QrCode } from 'lucide-react';
+import { Monitor, Smartphone, Wifi, WifiOff, QrCode, Maximize2, Minimize2, X } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { useSocket } from '../contexts/SocketContext';
 import { useSession } from '../contexts/SessionContext';
@@ -11,6 +11,7 @@ const DisplayScreen: React.FC = () => {
   const [mobileConnected, setMobileConnected] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [sessionUpdated, setSessionUpdated] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   const { socket, isConnected, connectionError, connectToSession } = useSocket();
   const { sessionId, generateNewSession, joinSession } = useSession();
@@ -52,6 +53,9 @@ const DisplayScreen: React.FC = () => {
       // Initially assume no mobile device is connected
       setMobileConnected(false);
 
+      // Request session status when first connecting
+      socket.emit('get-session-status', { sessionId });
+
       socket.on('try-on-result', (data) => {
         console.log('📺 Received try-on result:', data);
         console.log('📺 Current sessionId:', sessionId);
@@ -63,9 +67,25 @@ const DisplayScreen: React.FC = () => {
           setResultImage(data.result);
           setLastUpdate(data.timestamp);
           setShowQR(false);
+          // Automatically show fullscreen when result is received
+          setIsFullscreen(true);
         } else {
           console.log('❌ Result for different session, ignoring');
           console.log('❌ Expected:', sessionId, 'Got:', data.sessionId);
+        }
+      });
+
+      socket.on('session-status', (data) => {
+        console.log('📊 [DisplayScreen] Session status received:', data);
+        console.log('📊 [DisplayScreen] Mobile count in session:', data.mobileCount);
+        
+        // Update mobile connected status based on current session state
+        if (data.mobileCount > 0) {
+          console.log('📱 [DisplayScreen] Mobile devices already in session, setting mobileConnected to TRUE');
+          setMobileConnected(true);
+        } else {
+          console.log('📺 [DisplayScreen] No mobile devices in session, keeping mobileConnected FALSE');
+          setMobileConnected(false);
         }
       });
 
@@ -106,6 +126,7 @@ const DisplayScreen: React.FC = () => {
 
       return () => {
         socket.off('try-on-result');
+        socket.off('session-status');
         socket.off('session-joined');
         socket.off('client-disconnected');
       };
@@ -137,19 +158,165 @@ const DisplayScreen: React.FC = () => {
     connectToSession(newSessionId);
   };
 
-  const toggleConnectionTest = () => {
-    console.log('🧪 [TEST] Toggling mobileConnected state');
-    console.log('🧪 [TEST] Current mobileConnected:', mobileConnected);
-    setMobileConnected(!mobileConnected);
-    console.log('🧪 [TEST] New mobileConnected:', !mobileConnected);
+  const testConnection = () => {
+    console.log('🧪 [TEST] Testing real socket connection...');
+    console.log('🧪 [TEST] Socket exists:', !!socket);
+    console.log('🧪 [TEST] Socket connected:', socket?.connected);
+    console.log('🧪 [TEST] Session ID:', sessionId);
+    
+    if (!socket || !sessionId) {
+      console.error('🚫 [TEST] Cannot test - missing socket or session ID');
+      alert('❌ Test Failed: Missing socket or session ID');
+      return;
+    }
+    
+    // Test 1: Check socket connection
+    if (socket.connected) {
+      console.log('✅ [TEST] Socket is connected');
+      
+      // Set up test result listeners
+      const testTimeout = setTimeout(() => {
+        console.log('⏰ [TEST] Test timeout - server may not be responding');
+        alert('⚠️ Test Timeout: Server may not be responding');
+      }, 5000);
+      
+      let receivedStatus = false;
+      let receivedPong = false;
+      
+      const statusListener = (data: { sessionId: string; clientCount: number; mobileCount: number; displayCount: number; hasResult: boolean }) => {
+        console.log('📊 [TEST] Session status received:', data);
+        receivedStatus = true;
+        checkTestCompletion();
+      };
+      
+      const pongListener = () => {
+        console.log('🏓 [TEST] Pong received');
+        receivedPong = true;
+        checkTestCompletion();
+      };
+      
+      const checkTestCompletion = () => {
+        if (receivedStatus && receivedPong) {
+          clearTimeout(testTimeout);
+          socket.off('session-status', statusListener);
+          socket.off('pong', pongListener);
+          console.log('✅ [TEST] All tests passed!');
+          alert('✅ Connection Test Passed: Socket is working properly');
+        }
+      };
+      
+      // Set up temporary listeners
+      socket.on('session-status', statusListener);
+      socket.on('pong', pongListener);
+      
+      // Test 2: Request session status to verify server communication
+      console.log('🔄 [TEST] Requesting session status...');
+      socket.emit('get-session-status', { sessionId });
+      
+      // Test 3: Send a ping to verify two-way communication
+      console.log('🏓 [TEST] Sending ping...');
+      socket.emit('ping');
+      
+      // Test 4: Check if session listeners are set up
+      const listenerCount = socket.listeners('session-joined').length + 
+                           socket.listeners('session-status').length + 
+                           socket.listeners('try-on-result').length;
+      console.log('📡 [TEST] Active event listeners:', listenerCount);
+      
+      console.log('✅ [TEST] Connection test initiated - waiting for server response...');
+    } else {
+      console.error('❌ [TEST] Socket is not connected');
+      console.log('🔄 [TEST] Attempting to reconnect...');
+      connectToSession(sessionId);
+      alert('❌ Socket Disconnected: Attempting to reconnect...');
+    }
   };
 
   const toggleQR = () => {
     setShowQR(!showQR);
   };
 
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
+  };
+
+  const closeFullscreen = () => {
+    setIsFullscreen(false);
+  };
+
+  const maximizeResult = () => {
+    setIsFullscreen(true);
+  };
+
+  // Keyboard shortcuts for fullscreen
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isFullscreen) {
+        closeFullscreen();
+      }
+      if (event.key === 'f' && resultImage && !isFullscreen) {
+        maximizeResult();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [isFullscreen, resultImage]);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-black text-white">
+    <>
+      {/* Fullscreen Try-On Result Modal */}
+      {isFullscreen && resultImage && (
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="relative w-full h-full flex items-center justify-center p-4 md:p-6 lg:p-8">
+            {/* Close Button */}
+            <button
+              onClick={closeFullscreen}
+              className="absolute top-4 right-4 md:top-6 md:right-6 z-60 bg-white/20 hover:bg-white/30 rounded-full p-3 transition-colors"
+            >
+              <X className="h-6 w-6 text-white" />
+            </button>
+            
+            {/* Minimize Button */}
+            <button
+              onClick={toggleFullscreen}
+              className="absolute top-4 right-16 md:top-6 md:right-20 z-60 bg-white/20 hover:bg-white/30 rounded-full p-3 transition-colors"
+            >
+              <Minimize2 className="h-6 w-6 text-white" />
+            </button>
+            
+            {/* Fullscreen Image */}
+            <div className="relative w-full h-full max-w-5xl max-h-[90vh] flex items-center justify-center">
+              <img
+                src={resultImage}
+                alt="Virtual try-on result - Fullscreen"
+                className="max-w-full max-h-full object-contain rounded-lg"
+              />
+              
+              {/* Image Info Overlay */}
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 md:p-6 rounded-b-lg">
+                <div className="flex items-center justify-between text-white">
+                  <div>
+                    <h3 className="text-2xl font-bold mb-1">Virtual Try-On Result</h3>
+                    <p className="text-white/80">Session: {sessionId}</p>
+                  </div>
+                  {lastUpdate && (
+                    <div className="text-right">
+                      <p className="text-white/80 text-sm">Generated at</p>
+                      <p className="text-lg font-semibold">
+                        {new Date(lastUpdate).toLocaleString()}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Display Screen */}
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-black text-white">
       <div className="container mx-auto px-8 py-12">
         {/* Header */}
         <div className="flex items-center justify-between mb-12">
@@ -200,11 +367,22 @@ const DisplayScreen: React.FC = () => {
             </button>
             
             <button
-              onClick={toggleConnectionTest}
+              onClick={testConnection}
               className="bg-red-500/20 hover:bg-red-500/30 px-4 py-2 rounded-lg transition-colors text-red-200"
             >
               🧪 Test Connection
             </button>
+            
+            {/* Show Result Button - appears when result exists but not in fullscreen */}
+            {resultImage && !isFullscreen && (
+              <button
+                onClick={maximizeResult}
+                className="bg-green-500/20 hover:bg-green-500/30 px-4 py-2 rounded-lg transition-colors text-green-200 flex items-center"
+              >
+                <Maximize2 className="h-4 w-4 mr-2" />
+                View Result
+              </button>
+            )}
             
             <button
               onClick={handleNewSession}
@@ -247,6 +425,15 @@ const DisplayScreen: React.FC = () => {
                     className="w-full h-96 object-contain rounded-lg bg-black/20"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent rounded-lg pointer-events-none" />
+                  
+                  {/* Maximize Button */}
+                  <button
+                    onClick={maximizeResult}
+                    className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 rounded-full p-2 transition-colors"
+                    title="View fullscreen"
+                  >
+                    <Maximize2 className="h-5 w-5 text-white" />
+                  </button>
                 </div>
               </div>
             ) : (
@@ -333,6 +520,7 @@ const DisplayScreen: React.FC = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 
