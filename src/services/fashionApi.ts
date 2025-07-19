@@ -1,3 +1,4 @@
+import pica from 'pica';
 // Fashn.ai API integration
 const FASHN_API_URL = import.meta.env.VITE_FASHN_API_URL || 'https://api.fashn.ai';
 const FASHN_API_KEY = import.meta.env.VITE_FASHN_API_KEY || 'your-api-key';
@@ -8,6 +9,9 @@ export interface TryOnRequest {
   options?: {
     fit: 'tight' | 'loose' | 'normal';
     style: 'realistic' | 'stylized';
+    photoType?: 'auto' | 'photo' | 'sketch';
+    category?: 'auto' | 'tops' | 'bottoms' | 'one-pieces';
+    mode?: 'balanced' | 'fast' | 'accurate';
   };
 }
 
@@ -30,55 +34,201 @@ const dataURLtoBlob = (dataURL: string): Blob => {
   return new Blob([u8arr], { type: mime });
 };
 
+// Resize image using pica for high-quality downscaling
+const MAX_IMAGE_HEIGHT = 2000;
+const JPEG_QUALITY = 0.95;
+
+const resizeImagePica = async (dataUrl: string, maxDimension = MAX_IMAGE_HEIGHT): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.crossOrigin = 'anonymous'; // Fix for CORS/canvas tainting
+    img.onload = async () => {
+      const { width, height } = img;
+      if (width <= maxDimension && height <= maxDimension) {
+        // No resizing needed, just convert to JPEG
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0);
+        try {
+          canvas.toBlob(blob => {
+            if (blob) resolve(blob);
+            else reject(new Error('Failed to convert image to JPEG.'));
+          }, 'image/jpeg', JPEG_QUALITY);
+        } catch (err) {
+          console.warn('Canvas toBlob failed, possibly due to CORS/tainted image:', err);
+          reject(new Error('Image could not be processed due to CORS restrictions. Please use images from your device or a CORS-enabled source.'));
+        }
+        return;
+      }
+      // Calculate new dimensions (fit: inside)
+      const aspect = width / height;
+      let newWidth, newHeight;
+      if (width > height) {
+        newWidth = maxDimension;
+        newHeight = Math.round(maxDimension / aspect);
+      } else {
+        newHeight = maxDimension;
+        newWidth = Math.round(maxDimension * aspect);
+      }
+      // Source canvas
+      const sourceCanvas = document.createElement('canvas');
+      sourceCanvas.width = width;
+      sourceCanvas.height = height;
+      const ctx = sourceCanvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0);
+      // Target canvas
+      const targetCanvas = document.createElement('canvas');
+      targetCanvas.width = newWidth;
+      targetCanvas.height = newHeight;
+      // Use pica for high-quality downscale (Lanczos)
+      const picaInstance = pica();
+      await picaInstance.resize(sourceCanvas, targetCanvas);
+      try {
+        const outputBlob = await picaInstance.toBlob(targetCanvas, 'image/jpeg', JPEG_QUALITY);
+        resolve(outputBlob);
+      } catch (err) {
+        console.warn('Pica toBlob failed, possibly due to CORS/tainted image:', err);
+        reject(new Error('Image could not be processed due to CORS restrictions. Please use images from your device or a CORS-enabled source.'));
+      }
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+};
+
+// Convert Blob to base64
+const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+/**
+ * Perform virtual try-on using Fashn API, mapping all UI options to API parameters.
+ * @param userImage - base64 image of the user
+ * @param clothingImage - base64 image of the clothing
+ * @param options - includes clothingOptions (photoType, category), processingOptions (runMode, seed, modelVersion)
+ */
 export const performTryOn = async (
   userImage: string,
   clothingImage: string,
-  options: TryOnRequest['options'] = { fit: 'normal', style: 'realistic' }
+  options: {
+    photoType?: string;
+    category?: string;
+    runMode?: 'performance' | 'balanced' | 'quality';
+    seed?: string;
+    modelVersion?: 'v1.6' | 'v1.5';
+  } = {}
 ): Promise<TryOnResponse> => {
   try {
-    // In a real implementation, you would make an actual API call to Fashn.ai
-    // For demo purposes, we'll simulate the API call with a delay
-    
-    console.log('Starting virtual try-on process...');
-    console.log('User image size:', userImage.length);
-    console.log('Clothing image size:', clothingImage.length);
+    // Preprocess images: resize and convert to JPEG, then base64 encode
+    const [processedUserBlob, processedClothingBlob] = await Promise.all([
+      resizeImagePica(userImage),
+      resizeImagePica(clothingImage)
+    ]);
+    const [userImageBase64, clothingImageBase64] = await Promise.all([
+      blobToBase64(processedUserBlob),
+      blobToBase64(processedClothingBlob)
+    ]);
 
-    // Simulate API processing time
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Map runMode to API mode
+    let apiMode = 'balanced';
+    if (options.runMode === 'performance') apiMode = 'fast';
+    else if (options.runMode === 'quality') apiMode = 'quality';
+    else if (options.runMode === 'balanced') apiMode = 'balanced';
 
-    // Mock response - in production, this would be the actual API response
-    const mockResponse: TryOnResponse = {
-      image: userImage, // In reality, this would be the processed image from Fashn.ai
-      confidence: 0.95,
-      processing_time: 2.8
+    // Use modelVersion or default
+    const modelName = options.modelVersion === 'v1.5' ? 'tryon-v1.5' : 'tryon-v1.6';
+
+    // Use seed if provided, else random
+    const seed = options.seed ? parseInt(options.seed, 10) : Math.floor(Math.random() * 1000000);
+
+    // Build Fashn API payload
+    const payload = modelName === 'tryon-v1.5'
+      ? {
+          model_image: userImageBase64,
+          garment_image: clothingImageBase64,
+          garment_photo_type: options.photoType || 'auto',
+          category: options.category || 'auto',
+          mode: apiMode,
+          segmentation_free: true,
+          seed,
+          num_samples: 1
+        }
+      : {
+          model_name: modelName,
+          inputs: {
+            model_image: userImageBase64,
+            garment_image: clothingImageBase64,
+            garment_photo_type: options.photoType || 'auto',
+            category: options.category || 'auto',
+            mode: apiMode,
+            segmentation_free: true,
+            seed,
+            num_samples: 1
+          }
+        };
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${FASHN_API_KEY}`
     };
 
-    return mockResponse;
-
-    // Real implementation would look like this:
-    /*
-    const formData = new FormData();
-    formData.append('user_image', dataURLtoBlob(userImage), 'user.jpg');
-    formData.append('clothing_image', dataURLtoBlob(clothingImage), 'clothing.jpg');
-    formData.append('fit', options.fit);
-    formData.append('style', options.style);
-
-    const response = await fetch(`${FASHN_API_URL}/try-on`, {
+    // Step 1: POST to /run
+    const runResponse = await fetch(`${FASHN_API_URL}/v1/run`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${FASHN_API_KEY}`,
-        'X-API-Version': '2024-01'
-      },
-      body: formData
+      headers: headers,
+      body: JSON.stringify(payload)
     });
-
-    if (!response.ok) {
-      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    if (!runResponse.ok) {
+      const errorData = await runResponse.json().catch(() => ({}));
+      throw new Error(errorData.error || runResponse.statusText);
     }
+    const runData = await runResponse.json();
+    const predId = runData.id;
+    if (!predId) throw new Error('Failed to get prediction ID from Fashn API');
 
-    const result = await response.json();
-    return result;
-    */
+    // Step 2: Poll /status/<id>
+    const maxPollingTime = 180 * 1000; // 3 minutes
+    const pollingInterval = 2000; // 2 seconds
+    const startTime = Date.now();
+    let statusData;
+    while (Date.now() - startTime < maxPollingTime) {
+      const statusResponse = await fetch(`${FASHN_API_URL}/v1/status/${predId}`, {
+        method: 'GET',
+        headers: headers
+      });
+      if (!statusResponse.ok) {
+        await new Promise(res => setTimeout(res, pollingInterval));
+        continue;
+      }
+      statusData = await statusResponse.json();
+      if (statusData.status === 'completed') {
+        break;
+      } else if (
+        statusData.status !== 'starting' &&
+        statusData.status !== 'in_queue' &&
+        statusData.status !== 'processing'
+      ) {
+        throw new Error(statusData.error?.message || 'Prediction failed');
+      }
+      await new Promise(res => setTimeout(res, pollingInterval));
+    }
+    if (!statusData || statusData.status !== 'completed') {
+      throw new Error('Maximum polling time exceeded or prediction did not complete.');
+    }
+    // Return the first output image (or all if needed)
+    const outputImage = Array.isArray(statusData.output) ? statusData.output[0] : statusData.output;
+    return {
+      image: outputImage,
+      confidence: 1.0, // Fashn API does not return confidence, so set dummy value
+      processing_time: (Date.now() - startTime) / 1000
+    };
   } catch (error) {
     console.error('Virtual try-on failed:', error);
     throw new Error('Failed to process virtual try-on. Please try again.');

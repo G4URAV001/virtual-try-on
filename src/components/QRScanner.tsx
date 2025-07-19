@@ -531,7 +531,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
         <div className="space-y-2 text-blue-700 text-sm">
           <div className="flex items-start">
             <div className="bg-blue-500 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold text-white mr-2 mt-0.5">1</div>
-            <p>Open display screen: <code>localhost:5173/display</code></p>
+            <p>Open display screen</p>
           </div>
           <div className="flex items-start">
             <div className="bg-blue-500 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold text-white mr-2 mt-0.5">2</div>

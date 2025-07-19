@@ -8,6 +8,6 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   server: {
-    host: '0.0.0.0',  // 👈 This is the important part
+    host: '0.0.0.0',  
   }
 });

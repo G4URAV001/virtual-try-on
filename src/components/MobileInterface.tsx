@@ -4,6 +4,7 @@ import CameraInput from './CameraInput';
 import ClothSelector from './ClothSelector';
 import TryOnResult from './TryOnResult';
 import QRScanner from './QRScanner';
+import ProcessingOptions from './ProcessingOptions';
 import { useSocket } from '../contexts/SocketContext';
 import { useSession } from '../contexts/SessionContext';
 import { performTryOn } from '../services/fashionApi';
@@ -12,7 +13,6 @@ export interface ClothingItem {
   id: string;
   name: string;
   image: string;
-  category: string;
 }
 
 type Step = 'qr-scan' | 'camera' | 'clothing' | 'processing' | 'result';
@@ -25,6 +25,8 @@ const MobileInterface: React.FC = () => {
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [clothingOptions, setClothingOptions] = useState<{ photoType: string; category: string }>({ photoType: 'auto', category: 'auto' });
+  const [processingOptions, setProcessingOptions] = useState<any>(null);
   
   const { socket, isConnected, connectToSession } = useSocket();
   const { sessionId, joinSession } = useSession();
@@ -97,28 +99,31 @@ const MobileInterface: React.FC = () => {
       id: 'custom',
       name: 'Custom Upload',
       image: imageDataUrl,
-      category: 'uploaded'
     });
     setError(null);
   };
 
-  const handleTryOn = async () => {
+  const handleNextFromClothing = () => {
+    setCurrentStep('processing');
+  };
+
+  const handleTryOnWithOptions = async (procOptions: any) => {
     if (!userImage || (!selectedClothing && !clothingImage)) {
       setError('Please capture a photo and select clothing first');
       return;
     }
-
     setIsProcessing(true);
-    setCurrentStep('processing');
+    setProcessingOptions(procOptions);
     setError(null);
-
     try {
       const clothingImageToUse = clothingImage || selectedClothing!.image;
-      const result = await performTryOn(userImage, clothingImageToUse);
-      
+      // Always use the latest clothingOptions (category, photoType) from radio buttons
+      const result = await performTryOn(userImage, clothingImageToUse, {
+        ...clothingOptions,
+        ...procOptions
+      });
       setResultImage(result.image);
       setCurrentStep('result');
-
       // Send result to display via Socket.IO
       if (socket && sessionId) {
         const resultData = {
@@ -126,24 +131,9 @@ const MobileInterface: React.FC = () => {
           result: result.image,
           timestamp: new Date().toISOString()
         };
-        
-        console.log('📤 Sending try-on result to session:', sessionId);
-        console.log('📤 Full result data:', resultData);
-        console.log('📤 Image data length:', result.image?.length || 0);
-        console.log('📤 Image data preview:', result.image?.substring(0, 100) + '...');
-        
         socket.emit('try-on-result', resultData);
-        
-        // Also log to verify the emit worked
-        console.log('✅ Try-on result emitted to server');
-      } else {
-        console.warn('⚠️ Cannot send result: no socket or session ID');
-        console.warn('⚠️ Socket exists:', !!socket);
-        console.warn('⚠️ Session ID exists:', !!sessionId);
-        console.warn('⚠️ Session ID value:', sessionId);
       }
     } catch (error) {
-      console.error('Try-on failed:', error);
       setError('Virtual try-on failed. Please try again.');
       setCurrentStep('clothing');
     } finally {
@@ -235,15 +225,23 @@ const MobileInterface: React.FC = () => {
               onClothingSelect={handleClothingSelect}
               onClothingUpload={handleClothingUpload}
               selectedClothing={selectedClothing}
+              onNext={handleNextFromClothing}
+              onOptionsChange={setClothingOptions}
             />
           )}
 
           {currentStep === 'processing' && (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">Processing Your Try-On</h3>
-              <p className="text-gray-600">This may take a few moments...</p>
-            </div>
+            isProcessing ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">Processing Your Try-On</h3>
+                <p className="text-gray-600">This may take a few moments...</p>
+              </div>
+            ) : (
+              <ProcessingOptions
+                onTryOn={handleTryOnWithOptions}
+              />
+            )
           )}
 
           {currentStep === 'result' && resultImage && (
@@ -256,22 +254,6 @@ const MobileInterface: React.FC = () => {
           )}
 
           {/* Action Buttons */}
-          {currentStep === 'clothing' && selectedClothing && (
-            <button
-              onClick={handleTryOn}
-              disabled={isProcessing}
-              className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-600 transition-all duration-200 disabled:opacity-50"
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin inline mr-2" />
-                  Processing...
-                </>
-              ) : (
-                'Try On Virtual Outfit'
-              )}
-            </button>
-          )}
         </div>
 
         {/* Session Info */}
