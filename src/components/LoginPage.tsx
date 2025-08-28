@@ -13,11 +13,11 @@ const LoginPage: React.FC = () => {
   const location = useLocation();
   const { login, isAuthenticated } = useAuth();
 
-  // Hardcoded credentials for demo purposes
-  const DEMO_CREDENTIALS = {
-    username: 'admin',
-    password: 'virtual123'
-  };
+  // // Hardcoded credentials for demo purposes
+  // const DEMO_CREDENTIALS = {
+  //   username: 'admin',
+  //   password: 'virtual123'
+  // };
 
   // Redirect if already authenticated
   useEffect(() => {
