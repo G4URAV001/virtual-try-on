@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shirt, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Shirt, CheckCircle, AlertCircle } from 'lucide-react';
 import CameraInput from './CameraInput';
 import ClothSelector from './ClothSelector';
 import TryOnResult from './TryOnResult';
@@ -26,7 +26,6 @@ const MobileInterface: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clothingOptions, setClothingOptions] = useState<{ photoType: string; category: string }>({ photoType: 'auto', category: 'auto' });
-  const [processingOptions, setProcessingOptions] = useState<any>(null);
   
   const { socket, isConnected, connectToSession } = useSocket();
   const { sessionId, joinSession } = useSession();
@@ -37,26 +36,17 @@ const MobileInterface: React.FC = () => {
     const urlSessionId = urlParams.get('session');
     
     if (urlSessionId && urlSessionId !== sessionId) {
-      console.log('📱 [MobileInterface] Using URL session:', urlSessionId);
-      console.log('📱 [MobileInterface] Current sessionId before join:', sessionId);
       joinSession(urlSessionId);
       connectToSession(urlSessionId);
       setCurrentStep('camera'); // Skip QR scanning if session is in URL
       setError(null);
-      console.log('📱 [MobileInterface] Connected to session, skipping QR step');
-    } else if (!urlSessionId && !sessionId) {
-      console.log('📱 [MobileInterface] No URL session, starting with QR scan');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run only once on mount
 
   const handleQRScanned = (scannedSessionId: string) => {
-    console.log('📱 [MobileInterface] QR scanned, session ID:', scannedSessionId);
-    console.log('📱 [MobileInterface] Current sessionId before join:', sessionId);
-    
     // Prevent double connections to the same session
     if (sessionId === scannedSessionId && isConnected) {
-      console.log('📱 [MobileInterface] Already connected to this session, skipping');
       setCurrentStep('camera');
       return;
     }
@@ -69,7 +59,6 @@ const MobileInterface: React.FC = () => {
     connectToSession(scannedSessionId);
     
     // Immediately show that we're connecting
-    console.log('📱 [MobileInterface] Connection initiated, moving to camera step');
     setCurrentStep('camera');
     
     // Show brief connecting message
@@ -107,13 +96,16 @@ const MobileInterface: React.FC = () => {
     setCurrentStep('processing');
   };
 
-  const handleTryOnWithOptions = async (procOptions: any) => {
+  const handleTryOnWithOptions = async (procOptions: { 
+    runMode?: 'performance' | 'balanced' | 'quality'; 
+    seed?: string; 
+    modelVersion?: 'v1.6' | 'v1.5' 
+  }) => {
     if (!userImage || (!selectedClothing && !clothingImage)) {
       setError('Please capture a photo and select clothing first');
       return;
     }
     setIsProcessing(true);
-    setProcessingOptions(procOptions);
     setError(null);
     try {
       const clothingImageToUse = clothingImage || selectedClothing!.image;
@@ -133,7 +125,8 @@ const MobileInterface: React.FC = () => {
         };
         socket.emit('try-on-result', resultData);
       }
-    } catch (error) {
+    } catch (err) {
+      console.error('Virtual try-on error:', err);
       setError('Virtual try-on failed. Please try again.');
       setCurrentStep('clothing');
     } finally {
@@ -143,15 +136,6 @@ const MobileInterface: React.FC = () => {
 
   const resetProcess = () => {
     setCurrentStep('qr-scan');
-    setUserImage(null);
-    setSelectedClothing(null);
-    setClothingImage(null);
-    setResultImage(null);
-    setError(null);
-  };
-
-  const handleStartOver = () => {
-    setCurrentStep('camera');
     setUserImage(null);
     setSelectedClothing(null);
     setClothingImage(null);

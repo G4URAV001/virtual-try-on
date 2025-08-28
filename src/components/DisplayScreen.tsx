@@ -13,7 +13,6 @@ const DisplayScreen: React.FC = () => {
   const [initialized, setInitialized] = useState(false);
   const [sessionUpdated, setSessionUpdated] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [lastStatusUpdate, setLastStatusUpdate] = useState<number>(0);
   
   const { socket, isConnected, connectionError, connectToSession } = useSocket();
   const { sessionId, generateNewSession, joinSession } = useSession();
@@ -21,20 +20,16 @@ const DisplayScreen: React.FC = () => {
   useEffect(() => {
     if (initialized) return; // Prevent re-initialization
     
-    console.log('📺 [DisplayScreen] Starting initialization...');
-    
     // Check URL params for session ID first
     const urlParams = new URLSearchParams(window.location.search);
     const urlSessionId = urlParams.get('session');
     
     if (urlSessionId) {
-      console.log('📺 [DisplayScreen] Found URL session:', urlSessionId);
       joinSession(urlSessionId);
       connectToSession(urlSessionId);
     } else {
       // If no URL session, create a new one and update the URL
       const newSessionId = generateNewSession();
-      console.log('📺 [DisplayScreen] Created new session:', newSessionId);
       
       // Update the URL with the session parameter
       const newUrl = `${window.location.pathname}?session=${newSessionId}`;
@@ -50,8 +45,6 @@ const DisplayScreen: React.FC = () => {
 
   useEffect(() => {
     if (socket && sessionId) {
-      console.log('📺 Setting up socket listeners for session:', sessionId);
-
       // Clean up any existing listeners first to prevent duplicates
       socket.off('try-on-result');
       socket.off('session-status');
@@ -62,70 +55,48 @@ const DisplayScreen: React.FC = () => {
       setMobileConnected(false);
       setMobileConnecting(true);
 
-      // Clear connecting state after 30 seconds if no response (was 10 seconds)
+      // Clear connecting state after 30 seconds if no response
       const connectingTimeout = setTimeout(() => {
-        console.log('⏰ [DisplayScreen] Connecting timeout - clearing connecting state');
         setMobileConnecting(false);
       }, 30000);
 
       // Request session status when first connecting
       socket.emit('get-session-status', { sessionId });
 
-      // Helper function to update mobile connection state (no debounce)
-      const updateMobileConnectionState = (mobileCount: number, source: string) => {
+      // Helper function to update mobile connection state
+      const updateMobileConnectionState = (mobileCount: number) => {
         const newMobileConnected = mobileCount > 0;
-        console.log(`📱 [DisplayScreen] ${source} - Mobile count: ${mobileCount}, Setting mobileConnected to: ${newMobileConnected}`);
         setMobileConnected(newMobileConnected);
-        if (newMobileConnected) setMobileConnecting(false); // Immediately clear connecting state
+        if (newMobileConnected) setMobileConnecting(false);
         setSessionUpdated(prev => !prev);
       };
 
       socket.on('try-on-result', (data) => {
-        console.log('📺 [DisplayScreen] Received try-on result:', data);
-        console.log('📺 [DisplayScreen] Current sessionId:', sessionId);
-        console.log('📺 [DisplayScreen] Result sessionId:', data.sessionId);
-        console.log('📺 [DisplayScreen] Session IDs match:', data.sessionId === sessionId);
         if (data.sessionId === sessionId) {
           if (data.result && typeof data.result === 'string') {
             setResultImage(data.result);
             setLastUpdate(data.timestamp);
             setShowQR(false);
             setIsFullscreen(true);
-            console.log('✅ [DisplayScreen] Result image set and displayed.');
           } else {
             console.warn('⚠️ [DisplayScreen] Received try-on result with missing or invalid image data:', data);
           }
-        } else {
-          console.log('❌ [DisplayScreen] Result for different session, ignoring');
-          console.log('❌ [DisplayScreen] Expected:', sessionId, 'Got:', data.sessionId);
         }
       });
 
       socket.on('session-status', (data) => {
-        console.log('📊 [DisplayScreen] Session status received:', data);
-        updateMobileConnectionState(data.mobileCount, 'session-status');
+        updateMobileConnectionState(data.mobileCount);
       });
 
       socket.on('session-joined', (data) => {
-        console.log('📱 [DisplayScreen] Session-joined event received:', data);
-        console.log('📱 [DisplayScreen] Event session ID:', data.sessionId);
-        console.log('📱 [DisplayScreen] Our session ID:', sessionId);
-        console.log('📱 [DisplayScreen] Device type that joined:', data.joinedDeviceType);
         if (data.sessionId === sessionId) {
-          updateMobileConnectionState(data.mobileCount, 'session-joined');
-        } else {
-          console.log('📱 [DisplayScreen] Ignoring session-joined for different session');
+          updateMobileConnectionState(data.mobileCount);
         }
       });
 
       socket.on('client-disconnected', (data) => {
-        console.log('❌ [DisplayScreen] Client disconnected:', data);
-        console.log('❌ [DisplayScreen] Disconnected device type:', data.deviceType);
-        console.log('📊 [DisplayScreen] Session ID:', data.sessionId);
         if (data.sessionId === sessionId) {
-          updateMobileConnectionState(data.mobileCount, 'client-disconnected');
-        } else {
-          console.log('❌ [DisplayScreen] Ignoring client-disconnected for different session');
+          updateMobileConnectionState(data.mobileCount);
         }
       });
 
@@ -136,20 +107,16 @@ const DisplayScreen: React.FC = () => {
         socket.off('client-disconnected');
         if (connectingTimeout) clearTimeout(connectingTimeout);
       };
-    } else {
-      console.log('⚠️ Cannot set up listeners - missing socket or sessionId:', { socket: !!socket, sessionId });
     }
     // ONLY depend on socket and sessionId!
   }, [socket, sessionId]);
 
   const handleNewSession = () => {
     const newSessionId = generateNewSession();
-    console.log('🔄 [DisplayScreen] Creating new session:', newSessionId);
     
     // Update the browser URL with the new session ID
     const newUrl = `${window.location.pathname}?session=${newSessionId}`;
     window.history.pushState({}, '', newUrl);
-    console.log('🔗 [DisplayScreen] Updated URL to:', newUrl);
     
     // Reset display state
     setResultImage(null);
@@ -163,80 +130,6 @@ const DisplayScreen: React.FC = () => {
     
     // Connect to the new session
     connectToSession(newSessionId);
-  };
-
-  const testConnection = () => {
-    console.log('🧪 [TEST] Testing real socket connection...');
-    console.log('🧪 [TEST] Socket exists:', !!socket);
-    console.log('🧪 [TEST] Socket connected:', socket?.connected);
-    console.log('🧪 [TEST] Session ID:', sessionId);
-    
-    if (!socket || !sessionId) {
-      console.error('🚫 [TEST] Cannot test - missing socket or session ID');
-      alert('❌ Test Failed: Missing socket or session ID');
-      return;
-    }
-    
-    // Test 1: Check socket connection
-    if (socket.connected) {
-      console.log('✅ [TEST] Socket is connected');
-      
-      // Set up test result listeners
-      const testTimeout = setTimeout(() => {
-        console.log('⏰ [TEST] Test timeout - server may not be responding');
-        alert('⚠️ Test Timeout: Server may not be responding');
-      }, 5000);
-      
-      let receivedStatus = false;
-      let receivedPong = false;
-      
-      const statusListener = (data: { sessionId: string; clientCount: number; mobileCount: number; displayCount: number; hasResult: boolean }) => {
-        console.log('📊 [TEST] Session status received:', data);
-        receivedStatus = true;
-        checkTestCompletion();
-      };
-      
-      const pongListener = () => {
-        console.log('🏓 [TEST] Pong received');
-        receivedPong = true;
-        checkTestCompletion();
-      };
-      
-      const checkTestCompletion = () => {
-        if (receivedStatus && receivedPong) {
-          clearTimeout(testTimeout);
-          socket.off('session-status', statusListener);
-          socket.off('pong', pongListener);
-          console.log('✅ [TEST] All tests passed!');
-          alert('✅ Connection Test Passed: Socket is working properly');
-        }
-      };
-      
-      // Set up temporary listeners
-      socket.on('session-status', statusListener);
-      socket.on('pong', pongListener);
-      
-      // Test 2: Request session status to verify server communication
-      console.log('🔄 [TEST] Requesting session status...');
-      socket.emit('get-session-status', { sessionId });
-      
-      // Test 3: Send a ping to verify two-way communication
-      console.log('🏓 [TEST] Sending ping...');
-      socket.emit('ping');
-      
-      // Test 4: Check if session listeners are set up
-      const listenerCount = socket.listeners('session-joined').length + 
-                           socket.listeners('session-status').length + 
-                           socket.listeners('try-on-result').length;
-      console.log('📡 [TEST] Active event listeners:', listenerCount);
-      
-      console.log('✅ [TEST] Connection test initiated - waiting for server response...');
-    } else {
-      console.error('❌ [TEST] Socket is not connected');
-      console.log('🔄 [TEST] Attempting to reconnect...');
-      connectToSession(sessionId);
-      alert('❌ Socket Disconnected: Attempting to reconnect...');
-    }
   };
 
   const toggleQR = () => {
@@ -377,13 +270,6 @@ const DisplayScreen: React.FC = () => {
             >
               <QrCode className="h-5 w-5 mr-2" />
               {showQR ? 'Hide QR' : 'Show QR'}
-            </button>
-            
-            <button
-              onClick={testConnection}
-              className="bg-red-500/20 hover:bg-red-500/30 px-4 py-2 rounded-lg transition-colors text-red-200"
-            >
-              🧪 Test Connection
             </button>
             
             {/* Show Result Button - appears when result exists but not in fullscreen */}

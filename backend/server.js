@@ -36,7 +36,7 @@ const sessions = new Map();
 const socketToSession = new Map();
 
 io.on('connection', (socket) => {
-  console.log(`✅ Client connected: ${socket.id}`);
+  console.log(`Client connected: ${socket.id}`);
 
   // Handle joining a session
   socket.on('join-session', (data) => {
@@ -45,12 +45,12 @@ io.on('connection', (socket) => {
     const deviceType = typeof data === 'string' ? 'unknown' : (data?.deviceType || 'unknown');
     
     if (!sessionId) {
-      console.error('❌ No session ID provided for join-session');
+      console.error('No session ID provided for join-session');
       socket.emit('error', { message: 'Session ID is required' });
       return;
     }
     
-    console.log(`📱 Socket ${socket.id} joining session: ${sessionId} as ${deviceType}`);
+    console.log(`Socket ${socket.id} joining session: ${sessionId} as ${deviceType}`);
     
     // Leave previous session if any
     const previousSession = socketToSession.get(socket.id);
@@ -88,7 +88,7 @@ io.on('connection', (socket) => {
     const mobileCount = Array.from(sessionData.deviceTypes.values()).filter(type => type === 'mobile').length;
     const displayCount = Array.from(sessionData.deviceTypes.values()).filter(type => type === 'display').length;
     
-    console.log(`📊 Session ${sessionId} now has: ${displayCount} displays, ${mobileCount} mobiles, ${sessionData.clients.size} total`);
+    console.log(`Session ${sessionId} now has: ${displayCount} displays, ${mobileCount} mobiles, ${sessionData.clients.size} total`);
 
     // Broadcast updated client count to ALL clients in the session IMMEDIATELY
     const broadcastData = {
@@ -104,28 +104,28 @@ io.on('connection', (socket) => {
     // Use immediate emission with no delay
     setImmediate(() => {
       io.to(sessionId).emit('session-joined', broadcastData);
-      console.log(`📤 Broadcasted session-joined immediately to session ${sessionId}`);
-      console.log(`📤 Broadcast data:`, JSON.stringify(broadcastData, null, 2));
+      console.log(`Broadcasted session-joined immediately to session ${sessionId}`);
+      console.log(`Broadcast data:`, JSON.stringify(broadcastData, null, 2));
     });
 
     // Send existing result to the newly joined client if available
     if (sessionData.lastResult) {
       setImmediate(() => {
         socket.emit('try-on-result', sessionData.lastResult);
-        console.log(`📤 Sent existing result to new client ${socket.id}`);
+        console.log(`Sent existing result to new client ${socket.id}`);
       });
     }
 
-    console.log(`📊 Session ${sessionId} now has ${sessionData.clients.size} clients`);
+    console.log(`Session ${sessionId} now has ${sessionData.clients.size} clients`);
   });
 
   // Handle session status request
   socket.on('get-session-status', (data) => {
     const sessionId = data.sessionId;
-    console.log(`📊 Session status requested for: ${sessionId} by socket: ${socket.id}`);
+    console.log(`Session status requested for: ${sessionId} by socket: ${socket.id}`);
     
     if (!sessionId) {
-      console.error('❌ No session ID provided for session status request');
+      console.error('No session ID provided for session status request');
       return;
     }
 
@@ -134,7 +134,7 @@ io.on('connection', (socket) => {
       const mobileCount = Array.from(sessionData.deviceTypes.values()).filter(type => type === 'mobile').length;
       const displayCount = Array.from(sessionData.deviceTypes.values()).filter(type => type === 'display').length;
       
-      console.log(`📊 Sending session status: ${displayCount} displays, ${mobileCount} mobiles, ${sessionData.clients.size} total`);
+      console.log(`Sending session status: ${displayCount} displays, ${mobileCount} mobiles, ${sessionData.clients.size} total`);
       
       const statusData = {
         sessionId,
@@ -145,9 +145,9 @@ io.on('connection', (socket) => {
       };
       
       socket.emit('session-status', statusData);
-      console.log(`📤 Sent session-status to socket ${socket.id}:`, JSON.stringify(statusData, null, 2));
+      console.log(`Sent session-status to socket ${socket.id}:`, JSON.stringify(statusData, null, 2));
     } else {
-      console.log(`📊 Session ${sessionId} not found, sending empty status`);
+      console.log(`Session ${sessionId} not found, sending empty status`);
       socket.emit('session-status', {
         sessionId,
         clientCount: 0,
@@ -161,10 +161,10 @@ io.on('connection', (socket) => {
   // Handle try-on results
   socket.on('try-on-result', (data) => {
     const sessionId = data.sessionId;
-    console.log(`🎨 Try-on result received for session: ${sessionId}`);
+    console.log(`Try-on result received for session: ${sessionId}`);
 
     if (!sessionId) {
-      console.error('❌ No session ID provided with try-on result');
+      console.error('No session ID provided with try-on result');
       return;
     }
 
@@ -179,7 +179,7 @@ io.on('connection', (socket) => {
 
     // Broadcast to all clients in the session
     socket.to(sessionId).emit('try-on-result', data);
-    console.log(`📤 Broadcasting result to session ${sessionId}`);
+    console.log(`Broadcasting result to session ${sessionId}`);
   });
 
   // Handle session updates
@@ -187,7 +187,7 @@ io.on('connection', (socket) => {
     const sessionId = socketToSession.get(socket.id);
     if (sessionId) {
       socket.to(sessionId).emit('session-update', data);
-      console.log(`📢 Session update broadcast to ${sessionId}`);
+      console.log(`Session update broadcast to ${sessionId}`);
     }
   });
 
@@ -204,7 +204,7 @@ io.on('connection', (socket) => {
 
   // Handle disconnection
   socket.on('disconnect', (reason) => {
-    console.log(`❌ Client disconnected: ${socket.id} (${reason})`);
+    console.log(`Client disconnected: ${socket.id} (${reason})`);
     
     const sessionId = socketToSession.get(socket.id);
     if (sessionId) {
@@ -219,8 +219,8 @@ io.on('connection', (socket) => {
         const mobileCount = Array.from(sessionData.deviceTypes.values()).filter(type => type === 'mobile').length;
         const displayCount = Array.from(sessionData.deviceTypes.values()).filter(type => type === 'display').length;
         
-        console.log(`📊 ${disconnectedDeviceType} disconnected from session ${sessionId}`);
-        console.log(`📊 Session ${sessionId} now has: ${displayCount} displays, ${mobileCount} mobiles, ${sessionData.clients.size} total`);
+        console.log(`${disconnectedDeviceType} disconnected from session ${sessionId}`);
+        console.log(`Session ${sessionId} now has: ${displayCount} displays, ${mobileCount} mobiles, ${sessionData.clients.size} total`);
         
         // Broadcast updated client count to remaining clients in session
         io.to(sessionId).emit('client-disconnected', {
@@ -235,9 +235,9 @@ io.on('connection', (socket) => {
         // Clean up empty sessions
         if (sessionData.clients.size === 0) {
           sessions.delete(sessionId);
-          console.log(`🗑️ Cleaned up empty session: ${sessionId}`);
+          console.log(`Cleaned up empty session: ${sessionId}`);
         } else {
-          console.log(`📊 Session ${sessionId} now has ${sessionData.clients.size} clients`);
+          console.log(`Session ${sessionId} now has ${sessionData.clients.size} clients`);
         }
       }
       socketToSession.delete(socket.id);
@@ -301,25 +301,25 @@ app.get('/api/sessions/:sessionId', (req, res) => {
 const PORT = process.env.PORT || 3001;
 
 server.listen(PORT, () => {
-  console.log(`🚀 Socket.IO server running on port ${PORT}`);
-  console.log(`📡 WebSocket endpoint: ws://localhost:${PORT}`);
-  console.log(`🏥 Health check: http://localhost:${PORT}/health`);
-  console.log(`📊 Sessions API: http://localhost:${PORT}/api/sessions`);
+  console.log(`Socket.IO server running on port ${PORT}`);
+  console.log(`WebSocket endpoint: ws://localhost:${PORT}`);
+  console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`Sessions API: http://localhost:${PORT}/api/sessions`);
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-  console.log('🛑 SIGTERM received, shutting down gracefully');
+  console.log('SIGTERM received, shutting down gracefully');
   server.close(() => {
-    console.log('💀 Server closed');
+    console.log('Server closed');
     process.exit(0);
   });
 });
 
 process.on('SIGINT', () => {
-  console.log('🛑 SIGINT received, shutting down gracefully');
+  console.log('SIGINT received, shutting down gracefully');
   server.close(() => {
-    console.log('💀 Server closed');
+    console.log('Server closed');
     process.exit(0);
   });
 });

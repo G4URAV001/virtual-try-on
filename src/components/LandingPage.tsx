@@ -1,14 +1,39 @@
 import React from 'react';
-import { Smartphone, Monitor, Shirt } from 'lucide-react';
+import { Smartphone, Monitor, Shirt, LogOut, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center p-4">
       <div className="max-w-4xl w-full">
-        {/* Header */}
+        {/* Header with User Info */}
+        <div className="flex justify-between items-center mb-8">
+          <div className="flex items-center">
+            <User className="h-8 w-8 text-gray-600 mr-3" />
+            <div>
+              <p className="text-sm text-gray-500">Welcome back,</p>
+              <p className="font-semibold text-gray-800">{user?.username}</p>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Logout
+          </button>
+        </div>
+
+        {/* Main Header */}
         <div className="text-center mb-12">
           <div className="bg-gradient-to-r from-blue-500 to-purple-500 rounded-full p-4 w-fit mx-auto mb-6">
             <Shirt className="h-12 w-12 text-white" />

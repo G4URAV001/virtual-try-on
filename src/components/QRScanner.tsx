@@ -25,7 +25,6 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
   useEffect(() => {
     QrScanner.hasCamera().then(hasCamera => {
       setHasCamera(hasCamera);
-      console.log('📱 Camera available:', hasCamera);
     }).catch(err => {
       console.error('❌ Camera check failed:', err);
       setHasCamera(false);
@@ -44,11 +43,8 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
   // Extract session ID from URL or direct session ID
   const extractSessionFromUrl = (data: string): string | null => {
     try {
-      console.log('🔍 Analyzing QR code data:', data);
-      
       // If it's already just a session ID (8 characters, alphanumeric)
       if (/^[A-Z0-9]{8}$/i.test(data.trim())) {
-        console.log('✅ Direct session ID detected:', data.trim());
         return data.trim().toUpperCase();
       }
       
@@ -57,7 +53,6 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
         const urlObj = new URL(data);
         const sessionParam = urlObj.searchParams.get('session');
         if (sessionParam) {
-          console.log('✅ Session extracted from URL:', sessionParam);
           return sessionParam.toUpperCase();
         }
       }
@@ -65,11 +60,9 @@ const QRScanner: React.FC<QRScannerProps> = ({ onQRScanned, isConnected, connect
       // Try to find session pattern in string (fallback)
       const sessionMatch = data.match(/session=([A-Z0-9]{8})/i);
       if (sessionMatch) {
-        console.log('✅ Session found via pattern match:', sessionMatch[1]);
         return sessionMatch[1].toUpperCase();
       }
       
-      console.log('❌ No session ID found in data');
       return null;
     } catch (err) {
       console.error('❌ Session extraction failed:', err);

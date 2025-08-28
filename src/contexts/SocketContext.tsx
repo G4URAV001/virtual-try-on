@@ -32,25 +32,18 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const location = useLocation();
 
   const connectToSession = (newSessionId: string) => {
-    console.log('🔌 [SocketContext] connectToSession called with:', newSessionId);
-    console.log('🔌 [SocketContext] Current route:', location.pathname);
-    console.log('🔌 [SocketContext] Current session:', currentSessionId);
-    
     // Check if already connected to this session with valid socket
     if (currentSessionId === newSessionId && socket?.connected) {
-      console.log('✅ [SocketContext] Already connected to session:', newSessionId);
       return;
     }
     
     // Only connect if we're on mobile or display routes
     if (location.pathname !== '/mobile' && location.pathname !== '/display') {
-      console.log('📍 [SocketContext] Not on valid route, cannot connect to socket');
       return;
     }
 
     // Disconnect existing socket if any
     if (socket) {
-      console.log('🔌 [SocketContext] Disconnecting existing socket');
       socket.disconnect();
       socket.removeAllListeners();
     }
@@ -58,7 +51,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     // Get socket URL from environment or default to localhost
     const socketUrl = (import.meta.env.VITE_SOCKET_URL as string) || 'http://localhost:3001';
     
-    console.log('🔌 [SocketContext] Connecting to Socket.IO server:', socketUrl, 'Session:', newSessionId);
     setCurrentSessionId(newSessionId);
 
     // Create socket connection with optimized settings
@@ -76,10 +68,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
     // Connection event handlers
     newSocket.on('connect', () => {
-      console.log('✅ [SocketContext] Connected to Socket.IO server:', newSocket.id);
-      console.log('📱 [SocketContext] Joining session:', newSessionId);
-      console.log('📱 [SocketContext] Current route:', location.pathname);
-      console.log('📱 [SocketContext] Emitting join-session event...');
       setIsConnected(true);
       setConnectionError(null);
       
@@ -88,11 +76,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       
       // Join the specific session with device type information
       newSocket.emit('join-session', { sessionId: newSessionId, deviceType });
-      console.log('✅ [SocketContext] join-session event emitted for:', newSessionId, 'as', deviceType);
     });
 
     newSocket.on('disconnect', (reason) => {
-      console.log('❌ Disconnected from Socket.IO server:', reason);
       setIsConnected(false);
       setConnectionError(`Disconnected: ${reason}`);
     });
@@ -103,8 +89,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       setConnectionError(`Connection failed: ${error.message}`);
     });
 
-    newSocket.on('reconnect', (attemptNumber) => {
-      console.log('🔄 Reconnected to Socket.IO server, attempt:', attemptNumber);
+    newSocket.on('reconnect', () => {
       setIsConnected(true);
       setConnectionError(null);
       // Rejoin session after reconnection with device type
@@ -119,23 +104,22 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     });
 
     // Session-specific event handlers
-    newSocket.on('session-joined', (data) => {
-      console.log('📱 Joined session:', data);
+    newSocket.on('session-joined', () => {
+      // Event handled
     });
 
-    newSocket.on('client-disconnected', (data) => {
-      console.log('👤 Client disconnected from session:', data);
+    newSocket.on('client-disconnected', () => {
+      // Event handled
     });
 
     newSocket.on('pong', () => {
-      console.log('🏓 Pong received from server');
+      // Health check response
     });
 
     setSocket(newSocket);
   };
 
   const disconnect = () => {
-    console.log('🧹 Manually disconnecting socket');
     if (socket) {
       socket.disconnect();
       socket.removeAllListeners();
@@ -150,7 +134,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     // Clean up connection when leaving mobile/display routes
     if (location.pathname !== '/mobile' && location.pathname !== '/display') {
       if (socket) {
-        console.log('📍 Left active route, disconnecting socket');
         disconnect();
       }
     }
@@ -171,7 +154,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   useEffect(() => {
     return () => {
       if (socket) {
-        console.log('🧹 Component unmounting, cleaning up socket');
         socket.disconnect();
         socket.removeAllListeners();
       }
