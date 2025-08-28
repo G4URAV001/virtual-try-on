@@ -13,13 +13,6 @@ const LoginPage: React.FC = () => {
   const location = useLocation();
   const { login, isAuthenticated } = useAuth();
 
-  // // Hardcoded credentials for demo purposes
-  // const DEMO_CREDENTIALS = {
-  //   username: 'admin',
-  //   password: 'virtual123'
-  // };
-
-  // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
       const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/landing';
@@ -79,24 +72,6 @@ const LoginPage: React.FC = () => {
             <div>
               <h2 className="text-2xl font-bold text-white text-center mb-6">Sign In</h2>
             </div>
-
-            {/* Demo Credentials Banner */}
-            {/* <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 border border-green-400/30 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-green-200 text-sm font-medium mb-1">Demo Credentials</p>
-                  <p className="text-white text-xs">Username: {DEMO_CREDENTIALS.username}</p>
-                  <p className="text-white text-xs">Password: {DEMO_CREDENTIALS.password}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={fillDemoCredentials}
-                  className="bg-green-500/30 hover:bg-green-500/40 text-green-200 px-3 py-1 rounded-md text-xs transition-colors"
-                >
-                  Auto Fill
-                </button>
-              </div>
-            </div> */}
 
             {error && (
               <div className="bg-red-500/20 border border-red-400/30 rounded-lg p-4 flex items-center">
