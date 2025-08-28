@@ -53,11 +53,11 @@ const LoginPage: React.FC = () => {
     setShowPassword(!showPassword);
   };
 
-  const fillDemoCredentials = () => {
-    setUsername(DEMO_CREDENTIALS.username);
-    setPassword(DEMO_CREDENTIALS.password);
-    setError(null);
-  };
+  // const fillDemoCredentials = () => {
+  //   setUsername(DEMO_CREDENTIALS.username);
+  //   setPassword(DEMO_CREDENTIALS.password);
+  //   setError(null);
+  // };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex items-center justify-center p-4">
@@ -81,7 +81,7 @@ const LoginPage: React.FC = () => {
             </div>
 
             {/* Demo Credentials Banner */}
-            <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 border border-green-400/30 rounded-lg p-4">
+            {/* <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 border border-green-400/30 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-green-200 text-sm font-medium mb-1">Demo Credentials</p>
@@ -96,7 +96,7 @@ const LoginPage: React.FC = () => {
                   Auto Fill
                 </button>
               </div>
-            </div>
+            </div> */}
 
             {error && (
               <div className="bg-red-500/20 border border-red-400/30 rounded-lg p-4 flex items-center">
@@ -184,7 +184,7 @@ const LoginPage: React.FC = () => {
         {/* Footer */}
         <div className="text-center mt-8">
           <p className="text-blue-300 text-sm">
-            © 2025 Virtual Try-On System. All rights reserved.
+            Virtual Try-On System.
           </p>
         </div>
       </div>
